@@ -168,6 +168,18 @@ theorem fourUpper43 : RepSizeAtMost (adj (blocks := 4)) 43 :=
   upperOfChecks (pairedWitness 2) (monotoneOfGateCheck (by decide)) (by decide)
     (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
 
+/-- The two products test the two bits of the four labels. Each path
+    visits exactly one AND, with four diagonal ORs shared by the tests. -/
+def singleLayeredWitness : Circuit :=
+  ⟨[⟨.or, [0, 4]⟩, ⟨.or, [1, 5]⟩, ⟨.or, [2, 6]⟩, ⟨.or, [3, 7]⟩,
+    ⟨.or, [8, 9]⟩, ⟨.or, [10, 11]⟩, ⟨.and, [12, 13]⟩,
+    ⟨.or, [8, 10]⟩, ⟨.or, [9, 11]⟩, ⟨.and, [15, 16]⟩,
+    ⟨.or, [14, 17]⟩], 18⟩
+
+theorem singleLayeredUpper11 : RepSizeAtMost (adj (blocks := 1)) 11 :=
+  upperOfChecks singleLayeredWitness (monotoneOfGateCheck (by decide)) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
 /-- The ORs of inputs 3 and 7 meet indirectly through wires 12 and 13. -/
 def crownFourWithoutFourthPair : Circuit :=
   ⟨[⟨.or, [0, 4]⟩, ⟨.or, [1, 5]⟩, ⟨.or, [2, 6]⟩,

@@ -10,6 +10,7 @@ import CrownElevenCases
 import CrownSafeOr
 import CrownBlocks
 import CrownQuotient
+import CrownLayered
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -27,6 +28,7 @@ import CrownQuotient
 #print axioms CrownBlocks.fourUpper
 #print axioms CrownBlocks.twoUpper21
 #print axioms CrownBlocks.fourUpper43
+#print axioms CrownBlocks.singleLayeredUpper11
 #print axioms CrownBlocks.crownFourWithoutFourthPair_correct
 #print axioms CrownBlocks.AfterThreePairs.adj_restrict
 #print axioms CrownBlocks.AfterThreePairs.upperTen
@@ -39,3 +41,5 @@ import CrownQuotient
 #print axioms CrownQuotient.visible_of_missing_le_two
 #print axioms CrownQuotient.quotient_on_visible
 #print axioms CrownQuotient.quotient_of_visible
+#print axioms CrownLayered.no_common_column_slot
+#print axioms CrownLayered.six_of_large_columns

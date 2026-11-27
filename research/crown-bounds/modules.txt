@@ -74,3 +74,4 @@ CrownFrozenCost
 CrownSafeOr
 CrownBlocks
 CrownQuotient
+CrownLayered
