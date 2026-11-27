@@ -72,7 +72,7 @@ Lean checks circuits with 21 gates for two disjoint crowns and 43 gates for four
 
 When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
 
-**The unrestricted minima are 21, 33, 43, 55, and 65 for two through six crowns.** Reversing the OR network gives combinatorial proofs of these bounds. The general lower bound is `10k - 1 + ceil(2k/3)`. For `k ≥ 5` it is also at least `10k+5`. Seven crowns have size between 75 and 77. [Two and four crowns](crown-demand.md) · [Three crowns](crown-three.md) · [Five crowns](crown-five-exact.md) · [Six crowns and linear bound](crown-six.md) · [Lean witnesses](CrownBlocks.lean#L161)
+**The unrestricted minima are 21, 33, 43, 55, 65, and 77 for two through seven crowns.** Reversing the OR network gives the lower bounds. The weighted count gives `10k - 1 + ceil((3k+1)/4)` for every `k ≥ 2` and, with the seven-crown minimum, `10k+6` for `k ≥ 7`. [Two and four crowns](crown-demand.md) · [Three crowns](crown-three.md) · [Five crowns](crown-five-exact.md) · [Six crowns](crown-six.md) · [Seven crowns and weighted bound](crown-seven.md) · [Lean witnesses](CrownBlocks.lean#L161)
 
 The separate projection argument shows that two blocks can always be chosen so that zeroing them saves at least 17 gates. [Projection argument](crown-four.md#зануление-двух-выбранных-блоков)
 
