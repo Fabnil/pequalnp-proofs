@@ -11,6 +11,7 @@ import CrownSafeOr
 import CrownBlocks
 import CrownQuotient
 import CrownLayered
+import CrownDemand
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -43,3 +44,4 @@ import CrownLayered
 #print axioms CrownQuotient.quotient_of_visible
 #print axioms CrownLayered.no_common_column_slot
 #print axioms CrownLayered.six_of_large_columns
+#print axioms CrownDemand.partner_of_new_output

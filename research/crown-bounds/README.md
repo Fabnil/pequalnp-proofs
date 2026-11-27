@@ -72,9 +72,9 @@ Lean checks circuits with 21 gates for two disjoint crowns and 43 gates for four
 
 When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
 
-**The general minimum for two crowns is 21.** The proof combines case analysis with finite CaDiCaL checks, and Lean checks the 21-gate witness. Lean also checks the normalization that moves an OR input vanishing on all negative samples to the final output without increasing the circuit size. [Exact minimum](crown-blocks.md#точный-минимум-двух-корон) · [Normalization](CrownSafeOr.lean#L129)
+**The unrestricted minima are 21 for two crowns and 43 for four.** Reversing the entire OR network after separating the AND gates gives combinatorial proofs of both lower bounds. The same argument gives `10k+2` for `k ≥ 3`. The earlier CaDiCaL proof for two crowns remains reproducible below. [Combinatorial proof](crown-demand.md) · [Earlier two-crown proof](crown-blocks.md#точный-минимум-двух-корон) · [Lean witnesses](CrownBlocks.lean#L162)
 
-For `k ≥ 2` disjoint crowns, the unrestricted lower bound improves to `8k + 4 + floor(k/2)`. Two blocks can always be chosen so that zeroing them saves at least 17 gates. Four crowns now have size between 38 and 43. [Projection argument](crown-four.md#зануление-двух-выбранных-блоков)
+The separate projection argument shows that two blocks can always be chosen so that zeroing them saves at least 17 gates. [Projection argument](crown-four.md#зануление-двух-выбранных-блоков)
 
 For circuits with at most one AND on each input-output path, the exact minimum is `11k - 1` for even `k` and `11k` for odd `k`. This allows arbitrary sharing and arbitrarily many products. Transposing the OR layer reduces the lower bound to two families of sets per block. Lean checks the six-gate lower bound for one of the support configurations and the 11-gate single-block witness. [Layered proof](crown-four.md#схемы-с-одним-and-на-каждом-пути) · [Support lemma](CrownLayered.lean#L30) · [Single-block witness](CrownBlocks.lean#L181)
 
