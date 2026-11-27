@@ -74,3 +74,4 @@ import PlaneRobustCover
 #print axioms CyclePromise.mixedOddUpper61
 #print axioms PlaneCompletion.upperBound59
 #print axioms PlaneCompletion.minCoverAfterThree
+#print axioms PlaneCompletion.fourDegreePoints

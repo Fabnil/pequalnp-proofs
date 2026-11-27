@@ -17,7 +17,7 @@ Removing one positive cell from a five-by-five crown leaves a graph of exact min
 
 ## Incidence graph after deleting one line
 
-For a graph without a four-cycle, the stars obtained from the two raw OR-only operand sets of certain AND gates give a circuit lower bound. It counts the edges and a vertex cover of the union of these stars, plus the erased raw operand positions. For L-meta-9737, at least three edges must lie outside these stars in any 58-gate circuit. If a minimum circuit leaves exactly three edges outside them, a unique AND fires first on those edges and also fires from a singleton input. Lean checks the 59-gate construction and the robust matching fact used in the bound. [Proof](first-star-cover.md) · [Lean certificate](PlaneRobustCover.lean) · [Desk row](https://pequalnp.com/desk/row?gap=L-meta-9737)
+For a graph without a four-cycle, the stars obtained from the two raw OR-only operand sets of certain AND gates give a circuit lower bound. It counts the edges and a vertex cover of the union of these stars, plus the erased raw operand positions. For L-meta-9737, at least four edges must lie outside these stars in any minimum circuit of size at most 58. With exactly four uncovered edges and no isolated line in the star subgraph, at most three operand positions outside the stars are reachable from raw inputs. Lean checks the 59-gate construction and the graph facts used in the bound. [General bound](first-star-cover.md) · [Three-edge exclusion](first-star-three.md) · [Lean certificate](PlaneRobustCover.lean) · [Desk row](https://pequalnp.com/desk/row?gap=L-meta-9737)
 
 ## Reproduction
 

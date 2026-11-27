@@ -76,4 +76,9 @@ theorem degreeBetweenThreeAndFour : ∀ v : Fin 25,
     3 ≤ (Finset.univ.filter (G.Adj v)).card ∧ (Finset.univ.filter (G.Adj v)).card ≤ 4 := by
   decide +kernel
 
+theorem fourDegreePoints :
+    (Finset.univ.filter (fun p : Fin 25 => p.val < 13 ∧
+      (Finset.univ.filter (G.Adj p)).card = 4)).card = 9 := by
+  decide +kernel
+
 end PlaneCompletion
