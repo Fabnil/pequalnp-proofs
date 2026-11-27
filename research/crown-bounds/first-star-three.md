@@ -63,3 +63,5 @@ Use the one-center comparison. To differ from the rejecting singleton run, the t
 With exactly four missing edges, if no line is isolated, $H$ still has a 12-edge matching. If Hall's condition failed on $k$ lines, they would have at most $k-1$ neighboring points after the four deletions. At least $4k-4$ of their incidences remain. Every point has degree at most four, so outside the isolated-line case equality is forced and all $k-1$ neighbors have degree four into these lines. With $k\ge2$ and at most one common point per pair of lines, this requires $\binom{k}{2}\ge6(k-1)$ and so $k=12$. But only nine points have degree four in the original graph. [Checked point count](PlaneRobustCover.lean)
 
 For this spanning-on-lines four-edge case, (1) gives $w\le3$ at size 58. There can be only one nonadmissible AND with both operands raw-reachable, and at most one further raw-reachable operand among the other nonadmissible ANDs.
+
+The [four-edge analysis](first-star-four.md) excludes that further operand and gives additional equality restrictions.

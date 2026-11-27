@@ -75,3 +75,4 @@ import PlaneRobustCover
 #print axioms PlaneCompletion.upperBound59
 #print axioms PlaneCompletion.minCoverAfterThree
 #print axioms PlaneCompletion.fourDegreePoints
+#print axioms PlaneCompletion.degreeThreePointsNoCommonNeighbor

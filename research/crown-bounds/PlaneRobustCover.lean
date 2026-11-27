@@ -81,4 +81,23 @@ theorem fourDegreePoints :
       (Finset.univ.filter (G.Adj p)).card = 4)).card = 9 := by
   decide +kernel
 
+private def shortPoint (i : Fin 4) : Fin 25 := Fin.ofNat 25 (shifts i)
+
+private theorem shortPointIndex : ∀ p : Fin 25, p.val < 13 →
+    (Finset.univ.filter (G.Adj p)).card = 3 → ∃ i : Fin 4, p = shortPoint i := by
+  decide +kernel
+
+private theorem shortPointCheck : ∀ i j : Fin 4, i ≠ j → ∀ l : Fin 25,
+    ¬ (G.Adj (shortPoint i) l ∧ G.Adj (shortPoint j) l) := by
+  decide +kernel
+
+/-- These points lay together on the deleted line. -/
+theorem degreeThreePointsNoCommonNeighbor (p q : Fin 25) (hp : p.val < 13) (hq : q.val < 13)
+    (pd : (Finset.univ.filter (G.Adj p)).card = 3)
+    (qd : (Finset.univ.filter (G.Adj q)).card = 3) (different : p ≠ q) (l : Fin 25) :
+    ¬ (G.Adj p l ∧ G.Adj q l) := by
+  obtain ⟨i, rfl⟩ := shortPointIndex p hp pd
+  obtain ⟨j, rfl⟩ := shortPointIndex q hq qd
+  exact shortPointCheck i j (fun eq => different (congrArg shortPoint eq)) l
+
 end PlaneCompletion
