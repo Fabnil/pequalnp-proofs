@@ -84,4 +84,4 @@ The raw support at each $z_i$ consists of $C_{z_i},L_c$ and the operands of $g$.
 
 On a singleton $z_i$ the extra center $C_{z_i}$ cannot run along that prefix because its leaf has not appeared. The singleton must therefore follow the same prefix to the final leaf destination or stop before receiving any missing leaf. The latter would reject its own missing tests. So it reaches the leaf of the missing line at $x$, which has an accepting destination and is a nonedge at $z_i$. This is the final contradiction.
 
-The fourteen-center case is excluded. With five uncovered edges, the remaining thirteen-center case has exactly one spare union. The existence of a 58-gate circuit remains open.
+The fourteen-center case is excluded. With five uncovered edges, the remaining thirteen-center case has exactly one spare union. The [spare-union analysis](first-star-five-spare.md) restricts its centers to all lines and one point. The existence of a 58-gate circuit remains open.

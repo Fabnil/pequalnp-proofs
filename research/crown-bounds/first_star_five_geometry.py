@@ -1,4 +1,4 @@
-"""Enumerate necessary cover sizes in the saturated five-edge case."""
+"""Enumerate necessary cover sizes for a singleton-trigger star group."""
 
 from collections import defaultdict
 from itertools import combinations
@@ -31,9 +31,12 @@ def neighbor_masks(edges):
     return points, lines
 
 
-def necessary_covers(edges):
+def necessary_covers(edges, extra_union=False):
     graph_points, graph_lines = neighbor_masks(edges)
     modes = defaultdict(set)
+    missing_noncenter_limit = 2 if extra_union else 1
+    center_counts = (13,) if extra_union else (13, 14)
+    largest_point_excess = max(center_counts) - LINES
     for side in ("points", "lines"):
         trigger_centers = range(LINES if side == "points" else POINTS)
         for center in trigger_centers:
@@ -53,6 +56,15 @@ def necessary_covers(edges):
                 required_points = [0] * LINE_SUBSETS
                 affected_points = set(point for point, _ in deleted)
                 affected_lines = set(line for _, line in deleted)
+                singleton_leaf_points = 0
+                singleton_leaf_lines = 0
+                if extra_union:
+                    for point in affected_points:
+                        if CARD[graph_points[point] ^ missed_points[point]] == 1:
+                            singleton_leaf_points |= 1 << point
+                    for line in affected_lines:
+                        if CARD[retained_lines[line]] == 1:
+                            singleton_leaf_lines |= 1 << line
                 for omitted in range(LINE_SUBSETS):
                     if omitted:
                         bit = omitted & -omitted
@@ -61,15 +73,17 @@ def necessary_covers(edges):
                         )
                     if side == "points" and omitted >> center & 1:
                         continue
+                    if side == "lines" and omitted & singleton_leaf_lines:
+                        continue
                     k = CARD[omitted]
                     selected = required_points[omitted]
-                    if CARD[selected] > k + 2:
+                    if CARD[selected] > k + largest_point_excess:
                         continue
 
                     if side == "points":
-                        # Any unchosen point can miss at most one unchosen line.
+                        selected |= singleton_leaf_points
                         for point in affected_points:
-                            if CARD[omitted & missed_points[point]] >= 2:
+                            if CARD[omitted & missed_points[point]] > missing_noncenter_limit:
                                 selected |= 1 << point
                         minimum = CARD[selected]
                     else:
@@ -78,9 +92,10 @@ def necessary_covers(edges):
                         # The deleted point sets of different lines are disjoint.
                         for line in affected_lines:
                             if omitted >> line & 1:
-                                minimum += max(0, CARD[missed_lines[line] & ~selected] - 1)
+                                missing = CARD[missed_lines[line] & ~selected]
+                                minimum += max(0, missing - missing_noncenter_limit)
 
-                    for count in (13, 14):
+                    for count in center_counts:
                         point_centers = k + count - LINES
                         if minimum <= point_centers <= POINTS:
                             modes[count, side].add(k)
@@ -88,12 +103,22 @@ def necessary_covers(edges):
 
 
 if __name__ == "__main__":
-    actual = necessary_covers(edges_from_lean())
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--extra-union", action="store_true", help="Check the one-spare 13-center case")
+    args = parser.parse_args()
+    actual = necessary_covers(edges_from_lean(), extra_union=args.extra_union)
     for (count, side), omitted in sorted(actual.items()):
         print(count, side, sorted(omitted))
-    assert actual == {
+    saturated = {
         (13, "lines"): {0, 12},
         (13, "points"): {0},
         (14, "lines"): {0, 1, 10, 11},
         (14, "points"): {0, 1, 10, 11},
     }
+    one_spare = {
+        (13, "lines"): {0, 1, 2, 12},
+        (13, "points"): {0},
+    }
+    assert actual == (one_spare if args.extra_union else saturated)
