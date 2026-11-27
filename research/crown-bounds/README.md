@@ -13,6 +13,8 @@ Lean also checks the lower bound `3*n + 4` for every `n ≥ 10` and a circuit of
 
 The combined mathematical and computational arguments give exact sizes 38, 41, 45 and 55 at side lengths 11, 12, 13 and 16. The lower bounds use finite computations in Python and Z3 in addition to the Lean reductions. At `n = 16`, the lower bound excludes 38 gates for threshold two on 16 inputs, which excludes 54 gates for the crown and implies the bound `3*n + 7` for every `n ≥ 16`. The finite exclusion appears as a hypothesis in the Lean lower-bound theorem. [Conditional lower bound](CrownSixteenFrontier.lean#L58) · [Proof for size 16](crown-sixteen.md) · [Project discussion](https://github.com/open-goat/pequalnp-proofs/discussions/38248)
 
+Removing one positive cell from a five-by-five crown leaves a graph of exact minimum size 15. The transposed OR graph excludes 14 gates without a depth restriction. Lean checks the neighborhood inclusions and a 15-gate circuit in the original input order of mask `32435687`. [Combinatorial proof](crown-missing-cell.md) · [Lean witness](CrownMissingCell.lean#L46) · [Desk row L-meta-25467](https://pequalnp.com/desk/row?gap=L-meta-25467)
+
 ## Reproduction
 
 Use the toolchain pinned by `lean/lean-toolchain`. From the repository root, run the following commands. `modules.txt` orders the research modules by dependency. The final command prints the axioms used by the named theorems.

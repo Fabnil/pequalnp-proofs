@@ -12,6 +12,7 @@ import CrownBlocks
 import CrownQuotient
 import CrownLayered
 import CrownDemand
+import CrownMissingCell
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -52,3 +53,7 @@ import CrownDemand
 #print axioms CrownDemand.partner_of_new_output
 #print axioms CrownDemand.pairs_force_subset
 #print axioms CrownDemand.reduce_extra_positions
+#print axioms CrownMissingCell.agreesWithNormal
+#print axioms CrownMissingCell.rowNeighborhoodInclusion
+#print axioms CrownMissingCell.colNeighborhoodInclusion
+#print axioms CrownMissingCell.upper15
