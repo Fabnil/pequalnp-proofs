@@ -21,10 +21,17 @@ Use the toolchain pinned by `lean/lean-toolchain`. From the repository root, run
 cd lean
 lake exe cache get
 lake build PEqualNP.Defs PEqualNP.Defs.Represents \
-  PEqualNP.MetaComplexity.Helpers.LowMergeWires PEqualNP.Outside.L_meta_18677
+  PEqualNP.MetaComplexity.Helpers.LowMergeWires \
+  PEqualNP.MetaComplexity.Helpers.TableSearch PEqualNP.Outside.L_meta_18677
 bounds=../research/crown-bounds
 while IFS= read -r mod; do
   lake env lean -R "$bounds" -o ".lake/build/lib/lean/$mod.olean" "$bounds/$mod.lean" || exit
 done < "$bounds/modules.txt"
 lake env lean -R "$bounds" "$bounds/Audit.lean"
 ```
+
+## Disjoint four-by-four crowns
+
+Lean checks circuits with 23 gates for two disjoint crowns and 47 gates for four. For an arbitrary finite promise, the normalization lemma moves an OR input that vanishes on all negative samples to the final output without increasing the circuit size. [Upper bounds](CrownBlocks.lean#L114) · [Normalization](CrownSafeOr.lean)
+
+The attached combinatorial argument gives the lower bounds 19 and 35, respectively. It also narrows the possible circuits for the Desk budgets of 20 and 42. The SAT search for sizes 19 and 20 reached its time limit, leaving both sizes open. [Argument in Russian](crown-blocks.md) · [SAT encoding](crown_blocks_sat.py)

@@ -63,3 +63,5 @@ CrownThresholdFrontier
 CrownSubsetRestriction
 CrownSixteenFrontier
 CrownFrozenCost
+CrownSafeOr
+CrownBlocks
