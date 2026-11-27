@@ -97,3 +97,17 @@ python3 crown_quotient_formulas.py --extra-edge --repeats 3
 python3 crown_quotient_formulas.py --extra-edge --repeats 4
 python3 crown_quotient_sat.py 11 quotient-runs --extra-edge --only-count 3 --solver "$(command -v cadical)"
 ```
+
+## Partial pairings at size 19
+
+Every projection onto one block of a minimal size-19 circuit must retain exactly 11 gates with distinct tables. The four-merger case with three of one orientation, one of the other orientation and zero diagonal overlap is unsatisfiable under these constraints in CaDiCaL. With three cross-block ORs, the first attachment of an unmerged port has only two possible argument tables on the three merged signals. One of the two tables remains possible when opposite orientations share a diagonal label. [Proof of the restrictions](crown-blocks.md#первый-общий-сигнал-при-трёх-объединениях)
+
+Lean also checks an optimal 11-gate circuit in which all eight ports are used once and one diagonal pair has no direct connecting gate. Its two ports meet along an unshared OR chain. [Construction and correctness](CrownBlocks.lean#L172)
+
+```sh
+mkdir -p partial-runs
+solver=$(command -v cadical)
+python3 crown_partial_sat.py 19 4 partial-runs --solver "$solver" --seconds 45
+python3 crown_four_patterns.py partial-runs/crown4.cnf --solver "$solver"
+python3 crown_four_patterns.py partial-runs/crown4-or-region.cnf --solver "$solver" --or-region --seconds 48
+```

@@ -71,6 +71,22 @@ def gate(cnf: Cnf, wires: list[list[int]]):
     return (left, right, is_or), (a_bits, b_bits), output
 
 
+def unequal(cnf: Cnf, old: list[int], new: list[int], tests: list[int], one: int) -> list[int]:
+    differences = []
+    for i in tests:
+        a, b = old[i], new[i]
+        if abs(a) == one:
+            differences.append(-b if a == one else b)
+            continue
+        d = cnf.fresh()
+        cnf.clause(-d, a, b)
+        cnf.clause(-d, -a, -b)
+        cnf.clause(d, -a, b)
+        cnf.clause(d, a, -b)
+        differences.append(d)
+    return differences
+
+
 def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[tuple[int, ...]]]:
     groups = grouped_inputs(shape)
     num_seeds = shape[0] + shape[1]
@@ -80,6 +96,8 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
     cells, target, points = samples(groups)
     point_index = {p: i for i, p in enumerate(points)}
     negative = [i for i, value in enumerate(target) if not value]
+    within = [sorted({p for cell, p in cells.items() if block(cell[0]) == block(cell[1]) == b})
+              for b in range(2)]
     positive = [[p for cell, p in cells.items() if block(cell[0]) == b and edge(cell)]
                 for b in range(2)]
     diagonal = {
@@ -102,13 +120,36 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
     topology: Topology = []
     reads = []
     top_retained: list[list[int]] = [[], []]
+    redundant: list[list[int]] = [[], []]
     operand_present: list[list[tuple[int, int]]] = [[], []]
     signal_present = [[cnf.disjunction(*(row[p] for p in positive[b])) for row in wires] for b in range(2)]
+    three_seed_bound = size == 19 and num_seeds == 3
+    if three_seed_bound:
+        seed_only = [one] * 3 + [-one] * (num_vars - 3)
+        first_argument = [-one] * num_vars
+        first_attachment = []
+        attachable = [i for i, x in singles.items() if x < 4 or x >= 12]
+        ab, ac, bc = (point_index[p] for p in ((0, 1), (0, 2), (1, 2)))
+        seed_singletons = [point_index[(i,)] for i in range(3)]
 
     for index in range(num_gates):
         (left, right, is_or), (a, c), out = gate(cnf, wires)
         topology.append((left, right, is_or))
         reads.append([cnf.disjunction(l, r) for l, r in zip(left, right)])
+        if three_seed_bound:
+            pure_arg = cnf.disjunction(*(left[i] for i in attachable))
+            mixed_arg = cnf.disjunction(*(cnf.conjunction(right[i], first_argument[i])
+                                          for i in range(num_vars, len(wires))))
+            first_attachment.append(cnf.conjunction(pure_arg, mixed_arg))
+            seeded = [cnf.disjunction(*(cnf.conjunction(chosen, only)
+                                        for chosen, only in zip(operand, seed_only)))
+                      for operand in (left, right)]
+            seed_only.append(cnf.conjunction(*seeded))
+            only_bc = cnf.conjunction(-out[ac], out[bc])
+            only_ac = cnf.conjunction(out[ac], -out[bc])
+            pair_support = only_bc if shape[2] else cnf.disjunction(only_ac, only_bc)
+            first_argument.append(cnf.conjunction(seed_only[-1], out[ab], pair_support,
+                                                  *(-out[i] for i in seed_singletons)))
         cnf.clause(*(out[t] for tests in positive for t in tests))
         unsafe = cnf.disjunction(*(out[t] for t in negative))
         for operand in (a, c):
@@ -130,13 +171,24 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
             cnf.clause(-a_top, a[q], -c[q], c_top)
             allowed = [cnf.conjunction(left[i], right[j]) for i, j in diagonal if block(singles[i]) == b]
             cnf.clause(-out[p], out[q], *allowed)
-            top_retained[b].append(cnf.conjunction(a_top, c_top))
+            retained = cnf.conjunction(a_top, c_top)
+            top_retained[b].append(retained)
+            allow_equal = cnf.fresh() if size > 19 else -one
+            redundant[b].append(allow_equal)
+            # After basic folding, every earlier signal is still available
+            # as an input, an earlier retained gate, or a folded wire.
+            for previous in wires:
+                cnf.clause(-retained, allow_equal, *unequal(cnf, previous, out, within[b], one))
+            cnf.clause(-retained, allow_equal, *(cnf.conjunction(a[t], -c[t]) for t in within[b]))
+            cnf.clause(-retained, allow_equal, *(cnf.conjunction(c[t], -a[t]) for t in within[b]))
             operand_present[b].append(tuple(cnf.disjunction(*(v[t] for t in positive[b])) for v in (a, c)))
             signal_present[b].append(cnf.disjunction(*(out[t] for t in positive[b])))
         if index:
             cnf.clause(left[-1], right[-1], smaller_table(cnf, wires[-1][:-2], out[:-2], -one))
         wires.append(out)
 
+    if three_seed_bound:
+        cnf.clause(*first_attachment)
     for i, expected in enumerate(target):
         cnf.clause(wires[-1][i] if expected else -wires[-1][i])
     for i in range(num_vars + num_gates - 1):
@@ -147,6 +199,7 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
     for b in range(2):
         cnf.at_most(top_retained[b], size - 8)
         cnf.at_most([-present for present in top_retained[b]], 8 - num_seeds)
+        cnf.at_most(redundant[b], size - 19)
         root = num_vars + num_gates - 1
         needed = {root: signal_present[b][root]}
         for i in reversed(range(root)):

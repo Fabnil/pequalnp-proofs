@@ -66,11 +66,10 @@ private def rowOutput {blocks : ℕ} (C : Circuit) (u : Fin (4 * blocks)) : ℕ 
 private def rowTarget {blocks : ℕ} (u : Fin (4 * blocks)) : ℕ :=
   (15 - 2 ^ (u.val % 4)) <<< (4 * (u.val / 4))
 
-private theorem upperOfChecks {blocks size : ℕ} (C : Circuit) (monotone : Monotone2 C)
-    (cost : C.size ≤ size) (checks : ∀ u : Fin (4 * blocks), rowOutput C u = rowTarget u)
+private theorem representsOfChecks {blocks : ℕ} (C : Circuit) (monotone : Monotone2 C)
+    (checks : ∀ u : Fin (4 * blocks), rowOutput C u = rowTarget u)
     (bits : ∀ u v : Fin (4 * blocks), (rowTarget u).testBit v.val = adj u v) :
-    RepSizeAtMost (adj (blocks := blocks)) size := by
-  refine ⟨C, monotone, cost, ?_⟩
+    Represents (adj (blocks := blocks)) C := by
   intro u v
   let mask := 2 ^ (4 * blocks) - 1
   have pos : mask.testBit v.val = true := by simp [mask, v.isLt]
@@ -84,6 +83,12 @@ private theorem upperOfChecks {blocks size : ℕ} (C : Circuit) (monotone : Mono
   rw [Circuit.wires, wires, TableSearch.getD_map_testBit]
   change (rowOutput C u).testBit v.val = _
   rw [checks u, bits]
+
+private theorem upperOfChecks {blocks size : ℕ} (C : Circuit) (monotone : Monotone2 C)
+    (cost : C.size ≤ size) (checks : ∀ u : Fin (4 * blocks), rowOutput C u = rowTarget u)
+    (bits : ∀ u v : Fin (4 * blocks), (rowTarget u).testBit v.val = adj u v) :
+    RepSizeAtMost (adj (blocks := blocks)) size :=
+  ⟨C, monotone, cost, representsOfChecks C monotone checks bits⟩
 
 private theorem rowTargetBits {blocks : ℕ} (u v : Fin (4 * blocks)) :
     (rowTarget u).testBit v.val = adj u v := by
@@ -162,6 +167,31 @@ set_option maxRecDepth 32768 in
 theorem fourUpper43 : RepSizeAtMost (adj (blocks := 4)) 43 :=
   upperOfChecks (pairedWitness 2) (monotoneOfGateCheck (by decide)) (by decide)
     (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
+/-- The ORs of inputs 3 and 7 meet indirectly through wires 12 and 13. -/
+def crownFourWithoutFourthPair : Circuit :=
+  ⟨[⟨.or, [0, 4]⟩, ⟨.or, [1, 5]⟩, ⟨.or, [2, 6]⟩,
+    ⟨.and, [8, 10]⟩, ⟨.or, [7, 11]⟩, ⟨.or, [3, 12]⟩,
+    ⟨.and, [9, 13]⟩, ⟨.or, [8, 10]⟩, ⟨.or, [9, 13]⟩,
+    ⟨.and, [15, 16]⟩, ⟨.or, [14, 17]⟩], 18⟩
+
+set_option maxRecDepth 32768 in
+theorem crownFourWithoutFourthPair_correct :
+    Monotone2 crownFourWithoutFourthPair ∧
+      crownFourWithoutFourthPair.size = 11 ∧
+      Represents (adj (blocks := 1)) crownFourWithoutFourthPair ∧
+      (∀ i : Fin 8, (crownFourWithoutFourthPair.gates.flatMap Gate.inputs).count i.val = 1) ∧
+      (∀ g ∈ crownFourWithoutFourthPair.gates, g.inputs ≠ [3, 7] ∧ g.inputs ≠ [7, 3]) := by
+  have monotone : Monotone2 crownFourWithoutFourthPair := monotoneOfGateCheck (by decide)
+  refine ⟨monotone, by decide, representsOfChecks crownFourWithoutFourthPair monotone ?_ rowTargetBits,
+    ?_, ?_⟩
+  · intro u
+    fin_cases u <;> decide +kernel
+  · intro i
+    fin_cases i <;> decide
+  · intro g hg
+    simp only [crownFourWithoutFourthPair, List.mem_cons, List.not_mem_nil, or_false] at hg
+    rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
 
 /-- Compile a monotone run while keeping the wires for earlier functions available. -/
 private theorem realizeRun {n s : ℕ} {A : BF n → Prop} {F : BF n}
