@@ -70,3 +70,4 @@ import CyclePromise
 #print axioms CyclePromise.evenWitnessSize
 #print axioms CyclePromise.twelveUpper16
 #print axioms CyclePromise.sixteenUpper21
+#print axioms CyclePromise.mixedOddUpper61

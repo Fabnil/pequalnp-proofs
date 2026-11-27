@@ -18,7 +18,7 @@ s(C_{2n}^{\sqcup k})=
 \end{cases}
 $$
 
-In particular, a single $C_{12}$ takes 16 gates and a single $C_{16}$ takes 21 gates. The lower bounds allow arbitrary AND depth and sharing. The constructions have at most one AND on each input-output path. [Lean witnesses](CyclePromise.lean#L50)
+In particular, a single $C_{12}$ takes 16 gates and a single $C_{16}$ takes 21 gates. The lower bounds allow arbitrary AND depth and sharing. The constructions have at most one AND on each input-output path. [Lean witnesses](CyclePromise.lean#L51) · [Bounds that count unpaired lengths in mixtures](cycle-mixtures.md)
 
 ## Circuits
 
@@ -68,7 +68,7 @@ Take the output to be $(P\land Q)\lor\bigvee_{j=0}^{r-1}(U_j\land V_j)$. Each pr
 | $R_{r+i}$ for $1\le i\le r-2$ | $U_{i-1}\land V_{i-1},\ U_i\land V_i$ | $C_{r+i},C_{r+i+1}$ |
 | $R_{2r-1}$ | $P\land Q,\ U_{r-1}\land V_{r-1}$ | $C_{2r-1},C_0$ |
 
-This is the required cycle. The shared ORs cost $r$ gates, the factors cost $2r$, the products cost $r+1$, and the final OR costs $r$. Hence the total is $5r+1=5n/2+1$. The [Lean generator](CyclePromise.lean#L60) implements these formulas, checks its gate count for all $r\ge3$, and verifies the full promised tables at $r=3,4$.
+This is the required cycle. The shared ORs cost $r$ gates, the factors cost $2r$, the products cost $r+1$, and the final OR costs $r$. Hence the total is $5r+1=5n/2+1$. The generator implements these formulas, checks its gate count for all $r\ge3$, and verifies the full promised tables at $r=3,4$. [Lean generator](CyclePromise.lean#L61)
 
 ## Counting union outputs
 

@@ -1,4 +1,5 @@
 import PEqualNP.Defs.Represents
+import PEqualNP.MetaComplexity.Helpers.TableSearch
 
 /-! Representative circuits for bipartite cycles on the one-row/one-column promise. -/
 
@@ -91,5 +92,87 @@ theorem twelveUpper16 : RepSizeAtMost (adj (half := 6) (copies := 1)) 16 :=
 
 theorem sixteenUpper21 : RepSizeAtMost (adj (half := 8) (copies := 1)) 21 :=
   upper (evenWitness 4) (by decide) (by decide) (by decide +kernel)
+
+private def oddGates (side offset base r : ℕ) : List Gate :=
+  let n := 2 * r + 1
+  let d := r + 1
+  let merged := (List.range n).map fun i =>
+    ⟨.or, [offset + (d * i) % n, side + offset + (d * (i + 1)) % n]⟩
+  let neighbors := (List.range r).map fun i =>
+    let left := if i = 0 then 2 * r else 2 * i - 1
+    ⟨.or, [base + left, base + 2 * i + 1]⟩
+  let products := (List.range r).map (fun i => ⟨.and, [base + 2 * i, base + n + i]⟩) ++
+    [⟨.and, [base + 2 * r, base + 2 * r - 1]⟩]
+  let combine := (List.range r).map fun i =>
+    let left := if i = 0 then base + n + r else base + n + 2 * r + i
+    ⟨.or, [left, base + n + r + i + 1]⟩
+  merged ++ neighbors ++ products ++ combine
+
+/-- Four pairwise different cycle lengths, all congruent to two modulo four. -/
+def mixedOdd : Circuit :=
+  ⟨oddGates 24 0 48 1 ++ oddGates 24 3 55 2 ++ oddGates 24 8 67 3 ++
+    oddGates 24 15 84 4 ++ [⟨.or, [54, 66]⟩, ⟨.or, [83, 105]⟩, ⟨.or, [106, 107]⟩], 108⟩
+
+private def mixedNext : ℕ → ℕ
+  | 2 => 0
+  | 7 => 3
+  | 14 => 8
+  | 23 => 15
+  | i => i + 1
+
+/-- Adjacency for the disjoint union of `C₆`, `C₁₀`, `C₁₄`, and `C₁₈`. -/
+def mixedOddAdj (u v : Fin 24) : Bool :=
+  decide (v = u ∨ v.val = mixedNext u.val)
+
+open PEqualNP.MetaComplexity.Helpers
+
+private def rowInputs (u : Fin 24) : List ℕ :=
+  (List.ofFn fun i : Fin 24 => if i = u then 2 ^ 24 - 1 else 0) ++
+    List.ofFn fun j : Fin 24 => 2 ^ j.val
+
+private theorem mixedOnes : ∀ v : Fin 24, (2 ^ 24 - 1 : ℕ).testBit v.val = true := by
+  decide +kernel
+
+private theorem rowInputsBits (u v : Fin 24) :
+    (rowInputs u).map (fun t => t.testBit v.val) = oneEach u v := by
+  simp only [rowInputs, oneEach, List.map_append, List.map_ofFn]
+  congr 1
+  · congr 1
+    funext i
+    by_cases eq : i = u
+    · simpa [eq] using mixedOnes v
+    · simp [eq]
+  · congr 1
+    funext j
+    simp [Nat.testBit_two_pow, Fin.ext_iff, eq_comm]
+
+private def mixedMask (u : Fin 24) : ℕ :=
+  2 ^ u.val + 2 ^ mixedNext u.val
+
+private def mixedTable (u : Fin 24) : ℕ :=
+  (TableSearch.tabs (2 ^ 24 - 1) (rowInputs u) mixedOdd.gates).getD mixedOdd.output 0
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 600000 in
+private theorem mixedRows (u : Fin 24) : mixedTable u = mixedMask u := by
+  fin_cases u <;> decide +kernel
+
+private theorem mixedBits : ∀ u v : Fin 24, (mixedMask u).testBit v.val = mixedOddAdj u v := by
+  decide +kernel
+
+theorem mixedOddUpper61 : RepSizeAtMost mixedOddAdj 61 := by
+  have all : mixedOdd.gates.all allowed = true := by decide
+  apply upper mixedOdd all (by decide)
+  intro u v
+  have pos := mixedOnes v
+  have gok (g : Gate) (hg : g ∈ mixedOdd.gates) : TableSearch.GOk g := by
+    have h := List.all_eq_true.mp all g hg
+    cases op : g.op <;> simp [allowed, TableSearch.GOk, op] at h ⊢ <;> exact h
+  have wires := TableSearch.wires_tabs (2 ^ 24 - 1) v.val pos mixedOdd.gates (rowInputs u) gok
+  rw [rowInputsBits] at wires
+  change (mixedOdd.wires (oneEach u v)).getD mixedOdd.output false = _
+  rw [Circuit.wires, wires, TableSearch.getD_map_testBit]
+  change (mixedTable u).testBit v.val = _
+  rw [mixedRows, mixedBits]
 
 end CyclePromise
