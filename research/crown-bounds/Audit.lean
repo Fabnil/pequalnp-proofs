@@ -28,6 +28,7 @@ import CrownDemand
 #print axioms CrownBlocks.twoUpper
 #print axioms CrownBlocks.fourUpper
 #print axioms CrownBlocks.twoUpper21
+#print axioms CrownBlocks.threeUpper33
 #print axioms CrownBlocks.fourUpper43
 #print axioms CrownBlocks.singleLayeredUpper11
 #print axioms CrownBlocks.crownFourWithoutFourthPair_correct
@@ -45,3 +46,4 @@ import CrownDemand
 #print axioms CrownLayered.no_common_column_slot
 #print axioms CrownLayered.six_of_large_columns
 #print axioms CrownDemand.partner_of_new_output
+#print axioms CrownDemand.pairs_force_subset

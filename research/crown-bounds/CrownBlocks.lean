@@ -13,9 +13,8 @@ open CrownRun CrownForest CrownForestCost
 def adj {blocks : ℕ} (u v : Fin (4 * blocks)) : Bool :=
   decide (u.val / 4 = v.val / 4 ∧ u.val % 4 ≠ v.val % 4)
 
-private def blockGates (blocks block : ℕ) : List Gate :=
+private def blockGates (blocks block base : ℕ) : List Gate :=
   let raw := 4 * block
-  let base := 8 * blocks + 11 * block
   [⟨.or, [raw, 4 * blocks + raw]⟩,
    ⟨.or, [raw + 1, 4 * blocks + raw + 1]⟩,
    ⟨.or, [raw + 2, 4 * blocks + raw + 2]⟩,
@@ -33,7 +32,7 @@ private def joinGate (blocks preceding : ℕ) : Gate :=
   ⟨.or, [first, 8 * blocks + 11 * (preceding + 1) + 10]⟩
 
 def witness (blocks : ℕ) : Circuit :=
-  ⟨(List.range blocks).flatMap (blockGates blocks) ++
+  ⟨(List.range blocks).flatMap (fun block => blockGates blocks block (8 * blocks + 11 * block)) ++
     (List.range (blocks - 1)).map (joinGate blocks), 20 * blocks - 2⟩
 
 private theorem witnessMonotone (blocks : ℕ) : Monotone2 (witness blocks) := by
@@ -132,16 +131,16 @@ private def quotientGates : List Gate :=
    ⟨.and, [0, 10]⟩, ⟨.and, [1, 11]⟩, ⟨.and, [2, 12]⟩, ⟨.and, [3, 13]⟩,
    ⟨.or, [14, 15]⟩, ⟨.or, [16, 17]⟩, ⟨.or, [18, 19]⟩]
 
-private def pairGates (pairs pair : ℕ) : List Gate :=
+private def pairGates (blocks pair : ℕ) : List Gate :=
   let left := 8 * pair
-  let right := 8 * pairs + left
-  let base := 16 * pairs + 21 * pair
+  let right := 4 * blocks + left
+  let base := 8 * blocks + 21 * pair
   ((List.range 4).map fun i => ⟨.or, [left + i, right + 4 + i]⟩) ++
     ((List.range 4).map fun i => ⟨.or, [left + 4 + i, right + i]⟩) ++
     shiftGates base quotientGates
 
 def pairedWitness (pairs : ℕ) : Circuit :=
-  ⟨(List.range pairs).flatMap (pairGates pairs) ++
+  ⟨(List.range pairs).flatMap (pairGates (2 * pairs)) ++
     (List.range (pairs - 1)).map (fun i =>
       let first := if i = 0 then 16 * pairs + 20 else 37 * pairs + i - 1
       ⟨.or, [first, 16 * pairs + 21 * (i + 1) + 20]⟩),
@@ -178,6 +177,16 @@ def singleLayeredWitness : Circuit :=
 
 theorem singleLayeredUpper11 : RepSizeAtMost (adj (blocks := 1)) 11 :=
   upperOfChecks singleLayeredWitness (monotoneOfGateCheck (by decide)) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
+/-- The first two blocks share the paired construction. The third block
+    uses its own eleven gates before the final OR. -/
+def threeWitness : Circuit :=
+  ⟨pairGates 3 0 ++ blockGates 3 2 45 ++ [⟨.or, [44, 55]⟩], 56⟩
+
+set_option maxRecDepth 32768 in
+theorem threeUpper33 : RepSizeAtMost (adj (blocks := 3)) 33 :=
+  upperOfChecks threeWitness (monotoneOfGateCheck (by decide)) (by decide)
     (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
 
 /-- The ORs of inputs 3 and 7 meet indirectly through wires 12 and 13. -/

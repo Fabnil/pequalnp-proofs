@@ -69,4 +69,44 @@ theorem partner_of_new_output (rules : List (AndRule A)) (active : Finset A)
   rw [run_insert_of_partner_absent rules active distinct unique absent] at withSlot
   exact (Finset.mem_insert.mp withSlot).elim outputDistinct without
 
+theorem run_of_terminal (rules : List (AndRule A)) (active : Finset A)
+    (terminal : ∀ rule ∈ rules, ¬(rule.left ∈ active ∧ rule.right ∈ active)) :
+    run rules active = active := by
+  induction rules with
+  | nil => rfl
+  | cons rule rest ih =>
+    change run rest (rule.step active) = active
+    have disabled := terminal rule List.mem_cons_self
+    simpa [AndRule.step, disabled] using ih (fun r hr => terminal r (List.mem_cons_of_mem _ hr))
+
+/-- If the two terminal pairs share a position and jointly accept, their
+    other positions must be partners. Accepting with the first pair then
+    forces a third terminal set with the same shared position to include
+    the second pair. -/
+theorem pairs_force_subset (rules : List (AndRule A)) (third : Finset A)
+    {out common x y partner : A} (distinct : x ≠ partner) (outputDistinct : out ≠ x)
+    (partnerDistinct : partner ≠ common)
+    (unique : ∀ rule ∈ rules, (rule.left = x → rule.right = partner) ∧
+      (rule.right = x → rule.left = partner))
+    (pairTerminal : ∀ rule ∈ rules, ¬(rule.left ∈ ({common, y} : Finset A) ∧
+      rule.right ∈ ({common, y} : Finset A)))
+    (thirdTerminal : ∀ rule ∈ rules, ¬(rule.left ∈ third ∧ rule.right ∈ third))
+    (withoutPair : out ∉ ({common, y} : Finset A)) (withoutThird : out ∉ third)
+    (withPair : out ∈ run rules (insert x {common, y}))
+    (withThird : out ∈ run rules (insert x third)) (contains : common ∈ third) :
+    ({common, y} : Finset A) ⊆ third := by
+  have inPair := partner_of_new_output rules {common, y} distinct outputDistinct unique
+    (by rwa [run_of_terminal rules _ pairTerminal]) withPair
+  rw [run_of_terminal rules _ pairTerminal] at inPair
+  have partnerEq : partner = y := by
+    simp [partnerDistinct] at inPair
+    exact inPair
+  have inThird := partner_of_new_output rules third distinct outputDistinct unique
+    (by rwa [run_of_terminal rules _ thirdTerminal]) withThird
+  rw [run_of_terminal rules _ thirdTerminal, partnerEq] at inThird
+  intro a ha
+  rcases Finset.mem_insert.mp ha with rfl | h
+  · exact contains
+  · simpa using (Finset.mem_singleton.mp h ▸ inThird : a ∈ third)
+
 end CrownDemand
