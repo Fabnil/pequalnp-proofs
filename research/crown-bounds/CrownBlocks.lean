@@ -60,30 +60,29 @@ private theorem rowTableBits {n : ℕ} (u v : Fin n) :
     funext j
     simp [Nat.testBit_two_pow, Fin.ext_iff, eq_comm]
 
-private def rowOutput (blocks : ℕ) (u : Fin (4 * blocks)) : ℕ :=
-  (TableSearch.tabs (2 ^ (4 * blocks) - 1) (rowTables u) (witness blocks).gates).getD
-    (witness blocks).output 0
+private def rowOutput {blocks : ℕ} (C : Circuit) (u : Fin (4 * blocks)) : ℕ :=
+  (TableSearch.tabs (2 ^ (4 * blocks) - 1) (rowTables u) C.gates).getD C.output 0
 
 private def rowTarget {blocks : ℕ} (u : Fin (4 * blocks)) : ℕ :=
   (15 - 2 ^ (u.val % 4)) <<< (4 * (u.val / 4))
 
-private theorem upperOfChecks {blocks size : ℕ} (cost : (witness blocks).size ≤ size)
-    (checks : ∀ u, rowOutput blocks u = rowTarget u)
+private theorem upperOfChecks {blocks size : ℕ} (C : Circuit) (monotone : Monotone2 C)
+    (cost : C.size ≤ size) (checks : ∀ u : Fin (4 * blocks), rowOutput C u = rowTarget u)
     (bits : ∀ u v : Fin (4 * blocks), (rowTarget u).testBit v.val = adj u v) :
     RepSizeAtMost (adj (blocks := blocks)) size := by
-  refine ⟨witness blocks, witnessMonotone blocks, cost, ?_⟩
+  refine ⟨C, monotone, cost, ?_⟩
   intro u v
   let mask := 2 ^ (4 * blocks) - 1
   have pos : mask.testBit v.val = true := by simp [mask, v.isLt]
-  have allowed (g : Gate) (hg : g ∈ (witness blocks).gates) : TableSearch.GOk g := by
-    obtain ⟨op, arity⟩ := witnessMonotone blocks g hg
+  have allowed (g : Gate) (hg : g ∈ C.gates) : TableSearch.GOk g := by
+    obtain ⟨op, arity⟩ := monotone g hg
     simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at op
     exact ⟨op.imp_right Or.inl, arity⟩
-  have wires := TableSearch.wires_tabs mask v.val pos (witness blocks).gates (rowTables u) allowed
+  have wires := TableSearch.wires_tabs mask v.val pos C.gates (rowTables u) allowed
   rw [rowTableBits u v] at wires
-  change ((witness blocks).wires (oneEach u v)).getD (witness blocks).output false = _
+  change (C.wires (oneEach u v)).getD C.output false = _
   rw [Circuit.wires, wires, TableSearch.getD_map_testBit]
-  change (rowOutput blocks u).testBit v.val = _
+  change (rowOutput C u).testBit v.val = _
   rw [checks u, bits]
 
 private theorem rowTargetBits {blocks : ℕ} (u v : Fin (4 * blocks)) :
@@ -112,11 +111,57 @@ private theorem rowTargetBits {blocks : ℕ} (u v : Fin (4 * blocks)) :
 
 set_option maxRecDepth 32768 in
 theorem twoUpper : RepSizeAtMost (adj (blocks := 2)) 23 :=
-  upperOfChecks (by decide) (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+  upperOfChecks (witness 2) (witnessMonotone 2) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
 
 set_option maxRecDepth 32768 in
 theorem fourUpper : RepSizeAtMost (adj (blocks := 4)) 47 :=
-  upperOfChecks (by decide) (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+  upperOfChecks (witness 4) (witnessMonotone 4) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
+/-- Each AND checks a left input against the three other right inputs.
+    The two right-hand pair ORs each serve two of the tests. -/
+private def quotientGates : List Gate :=
+  [⟨.or, [4, 5]⟩, ⟨.or, [6, 7]⟩,
+   ⟨.or, [5, 9]⟩, ⟨.or, [4, 9]⟩, ⟨.or, [7, 8]⟩, ⟨.or, [6, 8]⟩,
+   ⟨.and, [0, 10]⟩, ⟨.and, [1, 11]⟩, ⟨.and, [2, 12]⟩, ⟨.and, [3, 13]⟩,
+   ⟨.or, [14, 15]⟩, ⟨.or, [16, 17]⟩, ⟨.or, [18, 19]⟩]
+
+private def pairGates (pairs pair : ℕ) : List Gate :=
+  let left := 8 * pair
+  let right := 8 * pairs + left
+  let base := 16 * pairs + 21 * pair
+  ((List.range 4).map fun i => ⟨.or, [left + i, right + 4 + i]⟩) ++
+    ((List.range 4).map fun i => ⟨.or, [left + 4 + i, right + i]⟩) ++
+    shiftGates base quotientGates
+
+def pairedWitness (pairs : ℕ) : Circuit :=
+  ⟨(List.range pairs).flatMap (pairGates pairs) ++
+    (List.range (pairs - 1)).map (fun i =>
+      let first := if i = 0 then 16 * pairs + 20 else 37 * pairs + i - 1
+      ⟨.or, [first, 16 * pairs + 21 * (i + 1) + 20]⟩),
+    38 * pairs - 2⟩
+
+private def allowedBinary (g : Gate) : Bool :=
+  match g.op with
+  | .and | .or => decide (g.inputs.length ≤ 2)
+  | _ => false
+
+private theorem monotoneOfGateCheck {C : Circuit} (all : C.gates.all allowedBinary = true) :
+    Monotone2 C := by
+  intro g hg
+  have gate := List.all_eq_true.mp all g hg
+  cases op : g.op <;> simp [allowedBinary, op] at gate ⊢ <;> exact gate
+
+set_option maxRecDepth 32768 in
+theorem twoUpper21 : RepSizeAtMost (adj (blocks := 2)) 21 :=
+  upperOfChecks (pairedWitness 1) (monotoneOfGateCheck (by decide)) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
+set_option maxRecDepth 32768 in
+theorem fourUpper43 : RepSizeAtMost (adj (blocks := 4)) 43 :=
+  upperOfChecks (pairedWitness 2) (monotoneOfGateCheck (by decide)) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
 
 /-- Compile a monotone run while keeping the wires for earlier functions available. -/
 private theorem realizeRun {n s : ℕ} {A : BF n → Prop} {F : BF n}

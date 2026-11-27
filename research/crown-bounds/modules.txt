@@ -65,3 +65,4 @@ CrownSixteenFrontier
 CrownFrozenCost
 CrownSafeOr
 CrownBlocks
+CrownQuotient

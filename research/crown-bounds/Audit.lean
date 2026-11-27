@@ -4,6 +4,7 @@ import CrownGridBounds
 import CrownSixteenFrontier
 import CrownSafeOr
 import CrownBlocks
+import CrownQuotient
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -15,3 +16,6 @@ import CrownBlocks
 #print axioms CrownSafeOr.normalize
 #print axioms CrownBlocks.twoUpper
 #print axioms CrownBlocks.fourUpper
+#print axioms CrownBlocks.twoUpper21
+#print axioms CrownBlocks.fourUpper43
+#print axioms CrownQuotient.pairedPromise_iff
