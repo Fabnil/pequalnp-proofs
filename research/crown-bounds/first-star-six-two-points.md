@@ -66,4 +66,4 @@ At most one unit is left for $q+R+E$. If a singleton fired just one of $g_1,g_2$
 
 Choose a position $f\in D(u)\setminus D(v)$. It must be emitted on singleton $v$ before its gate fires. No live raw support contains $f$ because $q=0$, so it is private to $u$. The emission must also add a track. Otherwise the loss of one emission in the tracking count leaves at most $2+R+E-1=2$ pending tracks. When $E=0$ a destination containing $f$ is either a singleton or contained in $D(u)$, and has no track. Hence $E=1$ and $R=0$. The unique external union must combine a support containing $f$ with another support. Its operand containing $f$ has no track, and the other has at most one. Thus all destinations contain at most one track, including the external union, and the two fully raw-reachable firings cannot leave three.
 
-All cases with two isolated points are excluded. Together with the isolated-line result, this leaves spanning $H$ or one isolated point.
+All cases with two isolated points are excluded. The [spanning follow-up](first-star-six-spanning.md) excludes a single isolated point as well.
