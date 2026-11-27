@@ -72,6 +72,8 @@ These commands use the current constraints from the first pass. Counts left by e
 
 **For every `k ≥ 1`, the exact minimum for `k` disjoint four-by-four crowns is `11k - 1` for even `k` and `11k` for odd `k`.** The lower bound permits arbitrary AND depth and sharing. In the transposed OR network, count how many positions each helper can introduce and how fully shared blocks can make up for a missing position. Equality forces disjoint helper pairs and rules out a fixed three-by-three crown under the exchange of sides. [Complete combinatorial proof](crown-all.md) · [87-gate witness for eight crowns in Lean](CrownBlocks.lean#L219)
 
+For a union of `p` isolated edges, `a` three-by-three crowns, and `b` four-by-four crowns, the exact size is `2p + ceil(15a/2) + 11b - 1 + (b mod 2)`. A single edge by itself takes zero gates. The parity term persists when both crown counts are odd. [Proof for mixed unions](crown-mixed.md) · [Lean witnesses](CrownMixed.lean#L60)
+
 Pair a row input from one crown with a column input of the same label from the other. Eight ORs reduce a pair of crowns to one crown edge test on eight signals, with all singleton and same-side pair tests required to be negative. The residual circuit uses 13 gates and shares two pair ORs. [21/43-gate constructions in Lean](CrownBlocks.lean#L161) · [Promise equivalence](CrownQuotient.lean#L22)
 
 When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)

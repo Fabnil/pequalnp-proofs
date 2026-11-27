@@ -13,6 +13,7 @@ import CrownQuotient
 import CrownLayered
 import CrownDemand
 import CrownMissingCell
+import CrownMixed
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -57,3 +58,8 @@ import CrownMissingCell
 #print axioms CrownMissingCell.rowNeighborhoodInclusion
 #print axioms CrownMissingCell.colNeighborhoodInclusion
 #print axioms CrownMissingCell.upper15
+#print axioms CrownMixed.singleThreeUpper7
+#print axioms CrownMixed.pairedThreeUpper14
+#print axioms CrownMixed.oneOfEachUpper19
+#print axioms CrownMixed.oneOfEachWithEdgeUpper21
+#print axioms CrownMixed.singleEdgeUpper0

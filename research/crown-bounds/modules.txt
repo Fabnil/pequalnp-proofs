@@ -77,3 +77,4 @@ CrownQuotient
 CrownLayered
 CrownDemand
 CrownMissingCell
+CrownMixed
