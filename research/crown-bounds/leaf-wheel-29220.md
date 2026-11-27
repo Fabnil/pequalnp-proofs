@@ -26,6 +26,12 @@ A circuit with at most three ANDs and one NOT would give an instance of a model 
 
 Consequently, a 13-gate circuit using one NOT would have at most eight ORs. Its 11-gate wheel circuit after stripping the two leaf ORs would have at most six ORs.
 
+## Operand tests after clearing the two leaves
+
+In any backward-reading 11-gate circuit for this wheel with exactly one NOT, each binary gate has a truth table distinct from all earlier wires. If its value agrees with an earlier wire, redirect all its consumers and the output, if needed, to that earlier wire. This deletes one binary gate and retains the NOT. The resulting ten-gate circuit, with nine binary gates and one NOT, contradicts the accepted wheel theorem. [Alias elimination and the lower-bound application in Lean](LeafWheelCoreIrredundant.lean) · [Accepted signed-wheel lower bound](https://github.com/open-goat/pequalnp-proofs/blob/a4e197c6a09356bd4ffa5f513bf729729e2ef76e/lean/PEqualNP/Outside/L_meta_10788.lean#L8440)
+
+For a binary gate with operand functions \(a,b\), there are wheel assignments with \((a,b)=(1,0)\) and \((a,b)=(0,1)\). If either assignment were absent, the AND or OR would equal one operand. This gives two necessary tests for every surviving binary gate with both pendants zero. Removing the two pendant ORs only redirects each of their outputs to its other operand. In the original thirteen-gate circuit, the same two tests therefore apply to every binary gate except the two pendant readers.
+
 ## Upper bound
 
 A 14-gate monotone circuit computes the OR of the four terms
