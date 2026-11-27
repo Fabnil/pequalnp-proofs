@@ -33,4 +33,5 @@ import CrownQuotient
 #print axioms CrownBlocks.AfterThreePairs.noNine
 #print axioms CrownQuotient.pairedPromise_iff
 #print axioms CrownQuotient.visible_of_missing_le_two
+#print axioms CrownQuotient.quotient_on_visible
 #print axioms CrownQuotient.quotient_of_visible

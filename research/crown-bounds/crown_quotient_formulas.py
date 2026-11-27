@@ -7,7 +7,7 @@ from functools import cache
 from itertools import product
 from time import monotonic
 
-from crown_quotient_sat import EXTRA_EDGE, INPUTS, TESTS, graph, repeated_sets
+from crown_quotient_sat import EXTRA_EDGE, INPUTS, TESTS, UNCHECKED_PAIRS, graph, repeated_sets
 
 
 INPUT_TABLES = tuple(sum(1 << i for i, sample in enumerate(TESTS) if x in sample)
@@ -29,14 +29,17 @@ def splits(counts: tuple[int, ...]):
 
 
 def find_formula(repeated: tuple[int, ...], seconds: float, table_limit: int,
-                 extra_edge: tuple[int, int] | None = None) -> tuple[object | None, int, int]:
+                 extra_edge: tuple[int, int] | None = None,
+                 unchecked: tuple[tuple[int, int], ...] = ()) -> tuple[object | None, int, int]:
     """Search one multiplicity profile, keeping all distinct feasible tables."""
     maximum = tuple(2 if x in repeated else 1 for x in range(INPUTS))
     unique = tuple(x for x in range(INPUTS) if x not in repeated)
-    edges, target = graph(extra_edge)
-    positive_table = sum(1 << i for i, value in enumerate(target) if value)
-    negative_table = sum(1 << i for i, value in enumerate(target) if not value)
+    edges, target = graph(extra_edge, unchecked)
+    positive_table = sum(1 << i for i, value in enumerate(target) if value is True)
+    negative_table = sum(1 << i for i, value in enumerate(target) if value is False)
     neighbors = tuple({b if a == x else a for a, b in edges if x in (a, b)} for x in range(INPUTS))
+    excludes = tuple({b if a == x else a for a, b in unchecked if x in (a, b)} | n
+                     for x, n in enumerate(neighbors))
     deadline = monotonic() + seconds
     stored = 0
     comparisons = 0
@@ -52,7 +55,7 @@ def find_formula(repeated: tuple[int, ...], seconds: float, table_limit: int,
             for z in present:
                 if z == x:
                     continue
-                for y in neighbors[x] - neighbors[z]:
+                for y in neighbors[x] - excludes[z]:
                     comparator = (z,) if z == y else tuple(sorted((z, y)))
                     off |= 1 << TEST_INDEX[comparator]
         return on, off
@@ -109,7 +112,8 @@ def find_formula(repeated: tuple[int, ...], seconds: float, table_limit: int,
                         return ("or", witness(left, a), witness(right, b))
         raise ValueError("the formula table has no recorded decomposition")
 
-    answer = witness(maximum, positive_table) if positive_table in tables(maximum) else None
+    solutions = tables(maximum)
+    answer = witness(maximum, next(iter(solutions))) if solutions else None
     return answer, stored, comparisons
 
 
@@ -117,14 +121,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seconds", type=float, default=30)
     parser.add_argument("--tables", type=int, default=600000)
-    parser.add_argument("--extra-edge", action="store_true", help="also accept the pair (6, 7)")
+    promise = parser.add_mutually_exclusive_group()
+    promise.add_argument("--extra-edge", action="store_true", help="also accept the pair (6, 7)")
+    promise.add_argument("--unchecked", choices=tuple(UNCHECKED_PAIRS),
+                         help="leave the indicated same-side pairs unspecified")
     parser.add_argument("--repeats", type=int, choices=(3, 4, 5), default=5)
     args = parser.parse_args()
     extra = EXTRA_EDGE if args.extra_edge else None
-    for repeated in repeated_sets(args.repeats, extra):
+    unchecked = UNCHECKED_PAIRS.get(args.unchecked, ())
+    for repeated in repeated_sets(args.repeats, extra, unchecked):
         key = sum(1 << x for x in repeated)
         try:
-            answer, stored, attempts = find_formula(repeated, args.seconds, args.tables, extra)
+            answer, stored, attempts = find_formula(repeated, args.seconds, args.tables, extra, unchecked)
         except SearchLimit:
             print(f"{key:02x} {repeated} UNKNOWN", flush=True)
             continue

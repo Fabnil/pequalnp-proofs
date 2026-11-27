@@ -116,3 +116,35 @@ python3 crown_four_patterns.py partial-runs/crown4-once-first-or.cnf --solver "$
 ```
 
 Each selected case and the one-crown test must return `UNSAT`. The single-crown exclusion uses SHA-256 `380654d65bf4085f5b6ba4d97a4b5250c0354b41e4db949b92a8ae9f11350293` for its generated CNF and also passed a run with CaDiCaL's internal DRAT and LRAT checking enabled. The five-or-more-pair cases use the earlier quotient checks described above.
+
+## Remaining configurations at size 20
+
+Use a representative that minimizes the number of gates active on a negative test, then maximizes direct cross-block ORs whose two original inputs are read once. All four-pair configurations are excluded. When the pairs have both orientations, the only remaining configurations have five pairs with orientation counts 3 and 2. Circuits with at most three pairs in one orientation also remain under consideration. [Proof and case counts](crown-quotient.md#зануление-целого-блока-при-объединениях-в-обоих-направлениях) · [Single orientation](crown-quotient.md#четыре-объединения-одного-направления)
+
+The partially specified eight-wire problems below all need at least 12 gates. The formula checks cover size 10 and the four repeated-input case at size 11. The SAT check covers the remaining size-11 case with three repeated inputs. The omitted pairs are free in each test.
+
+```sh
+for shape in overlap-0 overlap-1 overlap-2 triangle disjoint \
+  triangle-overlap-1 triangle-overlap-2 triangles-overlap-2 triangles-overlap-3; do
+  python3 crown_quotient_formulas.py --unchecked "$shape" --repeats 3 || exit
+  python3 crown_quotient_formulas.py --unchecked "$shape" --repeats 4 || exit
+  python3 crown_quotient_sat.py 11 partial-runs --solver "$solver" \
+    --unchecked "$shape" --only-count 3 || exit
+done
+```
+
+Each case in this loop must return `UNSAT`. For the four-pair case `(2,2,0)`, the additional projection check below must exclude every pattern with two or three repeated inputs. The pattern with four repeated inputs is retained for the full-circuit test. Both projections then force all four combined signals to be reused in the original circuit.
+
+```sh
+python3 crown_quotient_sat.py 12 partial-runs --solver "$solver" --unchecked overlap-0 \
+  --sole-or 0 1 6 7 --only-count 2 --seconds 40
+python3 crown_quotient_sat.py 12 partial-runs --solver "$solver" --unchecked overlap-0 \
+  --sole-or 0 1 6 7 --only-count 3 --seconds 40
+python3 crown_partial_sat.py 20 3 partial-runs --solver "$solver" --expose-pairs --seconds 75
+python3 crown_partial_sat.py 20 4 partial-runs --solver "$solver" --expose-pairs \
+  --shape 2 2 0 --seconds 110
+python3 crown_partial_sat.py 20 4 partial-runs --solver "$solver" --expose-pairs \
+  --shape 2 2 1 --shape 2 2 2 --shape 3 1 0 --shape 3 1 1 --seconds 75
+```
+
+The full-size tests above return `UNSAT`. The cumulative lower bound for the two-crown instance remains 20. The new Lean lemma transfers visible pair tests and the singleton tests implied by negative pairs to a restricted quotient. [Lean coverage lemma](CrownQuotient.lean#L88)

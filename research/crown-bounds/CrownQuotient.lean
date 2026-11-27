@@ -83,6 +83,28 @@ private theorem adj_comm (a b : Fin 8) : adj a b = adj b a := by
 private theorem negative_partner (a : Fin 8) : ∃ b : Fin 8, b ≠ a ∧ adj a b = false := by
   fin_cases a <;> decide
 
+/-- Visible pairs keep their prescribed value. Each singleton also keeps its
+    value when it has a visible negative superset. -/
+theorem quotient_on_visible {f : (Fin 8 → Bool) → Bool} {missing rows : Finset (Fin 8)}
+    (mono : ∀ x y, (∀ i, x i ≤ y i) → f x ≤ f y)
+    (negatives : ∀ a, ∃ b, visible missing rows a b ∧ adj a b = false)
+    (values : ∀ a b, rowKept missing rows a → colKept missing rows b →
+      f (pairInput a b) = adj a b) :
+    (∀ a b, visible missing rows a b → f (pairInput a b) = adj a b) ∧
+      ∀ a, f (pairInput a a) = false := by
+  have pair (a b : Fin 8) (visiblePair : visible missing rows a b) : f (pairInput a b) = adj a b := by
+    rcases visiblePair with ⟨ha, hb⟩ | ⟨hb, ha⟩
+    · exact values a b ha hb
+    · rw [pairInput_comm a b, adj_comm a b]
+      exact values b a hb ha
+  refine ⟨pair, fun a => ?_⟩
+  obtain ⟨b, seen, neg⟩ := negatives a
+  have pointwise (i : Fin 8) : pairInput a a i ≤ pairInput a b i := by
+    by_cases h : i = a <;> simp [pairInput, h]
+  have lower := mono (pairInput a a) (pairInput a b) pointwise
+  rw [pair a b seen, neg] at lower
+  exact Bool.eq_false_of_le_false lower
+
 /-- Keeping opposite ports for at most two missing pairs gives the full
     quotient promise. Monotonicity supplies the singleton tests. -/
 theorem quotient_of_visible {f : (Fin 8 → Bool) → Bool} {missing rows : Finset (Fin 8)}
@@ -91,22 +113,13 @@ theorem quotient_of_visible {f : (Fin 8 → Bool) → Bool} {missing rows : Fins
     (values : ∀ a b, rowKept missing rows a → colKept missing rows b →
       f (pairInput a b) = adj a b) :
     ∀ a b, f (pairInput a b) = adj a b := by
-  have pair (a b : Fin 8) (ne : a ≠ b) : f (pairInput a b) = adj a b := by
-    rcases covers a b ne with ⟨ha, hb⟩ | ⟨hb, ha⟩
-    · exact values a b ha hb
-    · rw [pairInput_comm a b, adj_comm a b]
-      exact values b a hb ha
+  obtain ⟨pair, singleton⟩ := quotient_on_visible mono (fun a => by
+    obtain ⟨b, ne, neg⟩ := negative_partner a
+    exact ⟨b, covers a b ne.symm, neg⟩) values
   intro a b
   by_cases eq : a = b
   · subst b
-    obtain ⟨b, ne, neg⟩ := negative_partner a
-    have pointwise (i : Fin 8) : pairInput a a i ≤ pairInput a b i := by
-      by_cases h : i = a <;> simp [pairInput, h]
-    have lower := mono (pairInput a a) (pairInput a b) pointwise
-    rw [pair a b ne.symm, neg] at lower
-    have reverse : false ≤ f (pairInput a a) := by
-      cases f (pairInput a a) <;> decide
-    simpa [adj] using le_antisymm lower reverse
-  · exact pair a b eq
+    simpa [adj] using singleton a
+  · exact pair a b (covers a b eq)
 
 end CrownQuotient
