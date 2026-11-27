@@ -193,6 +193,55 @@ theorem crownFourWithoutFourthPair_correct :
     simp only [crownFourWithoutFourthPair, List.mem_cons, List.not_mem_nil, or_false] at hg
     rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
 
+namespace AfterThreePairs
+
+private def half (overlap : Bool) (r c : ℕ) : Bool :=
+  decide (¬(r = 1 ∧ c = 2) ∧ ¬(overlap = true ∧ r = 0 ∧ c = 1))
+
+/-- The remaining two-by-three block and its transpose, with cross cells rejected. -/
+def adj (overlap : Bool) (u v : Fin 5) : Bool :=
+  if u.val < 2 then
+    if v.val < 3 then half overlap u.val v.val else false
+  else
+    if 3 ≤ v.val then half overlap (v.val - 3) (u.val - 2) else false
+
+def remainingRows (overlap : Bool) : Fin 5 → Fin 8 :=
+  if overlap then ![2, 3, 5, 6, 7] else ![2, 3, 4, 5, 7]
+
+def remainingColumns (overlap : Bool) : Fin 5 → Fin 8 :=
+  if overlap then ![1, 2, 3, 6, 7] else ![0, 1, 3, 6, 7]
+
+theorem adj_restrict (overlap : Bool) (u v : Fin 5) :
+    adj overlap u v = CrownBlocks.adj (blocks := 2) (remainingRows overlap u) (remainingColumns overlap v) := by
+  cases overlap <;> fin_cases u <;> fin_cases v <;> decide +kernel
+
+private def witness (overlap : Bool) : Circuit :=
+  ⟨[⟨.or, [0, 8]⟩, ⟨.or, [1, 9]⟩, ⟨.or, [2, 5]⟩, ⟨.or, [3, 6]⟩, ⟨.or, [4, 7]⟩] ++
+    (if overlap then
+      [⟨.or, [12, 14]⟩, ⟨.or, [12, 13]⟩, ⟨.and, [10, 15]⟩, ⟨.and, [11, 16]⟩, ⟨.or, [17, 18]⟩]
+    else
+      [⟨.or, [10, 11]⟩, ⟨.or, [12, 13]⟩, ⟨.and, [15, 16]⟩, ⟨.and, [10, 14]⟩, ⟨.or, [17, 18]⟩]), 19⟩
+
+set_option maxRecDepth 8192 in
+theorem upperTen (overlap : Bool) : RepSizeAtMost (adj overlap) 10 := by
+  refine ⟨witness overlap, monotoneOfGateCheck (by cases overlap <;> decide), ?_, ?_⟩
+  · cases overlap <;> decide
+  · intro u v
+    cases overlap <;> fin_cases u <;> fin_cases v <;> decide +kernel
+
+private theorem required (overlap : Bool) : ∀ i ∈ Finset.range 10, PnpResearch.Bipartite.Needed (adj overlap) i := by
+  have check (i : Fin 10) : PnpResearch.Bipartite.Needed (adj overlap) i.val := by
+    cases overlap <;> fin_cases i <;> unfold PnpResearch.Bipartite.Needed <;> decide +kernel
+  intro i hi
+  exact check ⟨i, Finset.mem_range.mp hi⟩
+
+theorem noNine (overlap : Bool) : ¬ RepSizeAtMost (adj overlap) 9 := by
+  apply PnpResearch.Bipartite.not_rep_size_of_path (a := 0) (b := 1) (c := 0) (d := 2)
+    (Finset.range 10) (required overlap) (by decide)
+  all_goals cases overlap <;> decide
+
+end AfterThreePairs
+
 /-- Compile a monotone run while keeping the wires for earlier functions available. -/
 private theorem realizeRun {n s : ℕ} {A : BF n → Prop} {F : BF n}
     (trace : UC gF MonoA s A F) (earlier : List Gate)

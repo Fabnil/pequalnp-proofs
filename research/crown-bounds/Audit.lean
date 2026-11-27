@@ -28,6 +28,9 @@ import CrownQuotient
 #print axioms CrownBlocks.twoUpper21
 #print axioms CrownBlocks.fourUpper43
 #print axioms CrownBlocks.crownFourWithoutFourthPair_correct
+#print axioms CrownBlocks.AfterThreePairs.adj_restrict
+#print axioms CrownBlocks.AfterThreePairs.upperTen
+#print axioms CrownBlocks.AfterThreePairs.noNine
 #print axioms CrownQuotient.pairedPromise_iff
 #print axioms CrownQuotient.visible_of_missing_le_two
 #print axioms CrownQuotient.quotient_of_visible

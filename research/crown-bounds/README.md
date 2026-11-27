@@ -72,7 +72,7 @@ Lean checks circuits with 21 gates for two disjoint crowns and 43 gates for four
 
 When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. The general budgets of 20 and 42 in the Desk remain open. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
 
-The general lower bounds for two and four crowns are 19 and 35. The 20-gate search reached its time limit. Lean also checks a general normalization lemma that moves an OR input that vanishes on all negative samples to the final output without increasing the circuit size. [Counting argument](crown-blocks.md) · [Normalization](CrownSafeOr.lean#L129)
+The general lower bounds for two and four crowns are 20 and 36. The proof of 20 combines case analysis with finite CaDiCaL checks. The 20-gate existence question remains open. Lean also checks a general normalization lemma that moves an OR input that vanishes on all negative samples to the final output without increasing the circuit size. [Lower-bound proof](crown-blocks.md#исключение-бюджета-19) · [Normalization](CrownSafeOr.lean#L129)
 
 To reproduce the finite search from this directory, use Python and CaDiCaL 2.1.2. The four `UNKNOWN` cases at size 12 are handled by the formula enumeration and the single-side argument above.
 
@@ -98,16 +98,21 @@ python3 crown_quotient_formulas.py --extra-edge --repeats 4
 python3 crown_quotient_sat.py 11 quotient-runs --extra-edge --only-count 3 --solver "$(command -v cadical)"
 ```
 
-## Partial pairings at size 19
+## Exclusion of size 19
 
-Every projection onto one block of a minimal size-19 circuit must retain exactly 11 gates with distinct tables. The four-merger case with three of one orientation, one of the other orientation and zero diagonal overlap is unsatisfiable under these constraints in CaDiCaL. With three cross-block ORs, the first attachment of an unmerged port has only two possible argument tables on the three merged signals. One of the two tables remains possible when opposite orientations share a diagonal label. [Proof of the restrictions](crown-blocks.md#первый-общий-сигнал-при-трёх-объединениях)
+Every projection onto one block of a minimal size-19 circuit must retain exactly 11 gates with distinct tables. The argument maximizes direct cross-block ORs by reassociating unshared OR chains and leaves seven cases. CaDiCaL excludes six directly. The last case reduces to an 11-gate one-crown property. When both ports of a diagonal pair are read once and enter ORs, their paths must meet using only ORs before either path branches. The proof lifts the unshared paths from the projection to the input circuit. [Full case analysis](crown-blocks.md#исключение-бюджета-19)
 
-Lean also checks an optimal 11-gate circuit in which all eight ports are used once and one diagonal pair has no direct connecting gate. Its two ports meet along an unshared OR chain. [Construction and correctness](CrownBlocks.lean#L172)
+Lean checks the exact size 10 of both restrictions obtained by setting three combined signals to zero. Lean also checks an optimal 11-gate circuit in which all eight ports are used once and one diagonal pair meets through two OR gates in series. [Lean declarations](CrownBlocks.lean)
 
 ```sh
 mkdir -p partial-runs
 solver=$(command -v cadical)
-python3 crown_partial_sat.py 19 4 partial-runs --solver "$solver" --seconds 45
-python3 crown_four_patterns.py partial-runs/crown4.cnf --solver "$solver"
-python3 crown_four_patterns.py partial-runs/crown4-or-region.cnf --solver "$solver" --or-region --seconds 48
+python3 crown_partial_sat.py 19 3 partial-runs --solver "$solver" --shape 2 1 0 --seconds 60
+python3 crown_partial_sat.py 19 3 partial-runs --solver "$solver" --shape 2 1 1 --expose-pairs --seconds 100
+python3 crown_partial_sat.py 19 4 partial-runs --solver "$solver" --shape 2 2 0 --shape 3 1 0 --seconds 45
+python3 crown_partial_sat.py 19 4 partial-runs --solver "$solver" --shape 2 2 1 --shape 3 1 1 --expose-pairs --seconds 85
+python3 crown_four_patterns.py partial-runs/crown4-once-first-or.cnf --solver "$solver" \
+  --ports pair-once --or-region --pair-first-or --seconds 90
 ```
+
+Each selected case and the one-crown test must return `UNSAT`. The single-crown exclusion uses SHA-256 `380654d65bf4085f5b6ba4d97a4b5250c0354b41e4db949b92a8ae9f11350293` for its generated CNF and also passed a run with CaDiCaL's internal DRAT and LRAT checking enabled. The five-or-more-pair cases use the earlier quotient checks described above.

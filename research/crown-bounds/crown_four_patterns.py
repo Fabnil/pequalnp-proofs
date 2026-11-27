@@ -24,7 +24,7 @@ DELETED = [[INDEX[(r, c)] for r, c in CELLS if r + ROWS != c and r != i and c !=
            for i in range(ROWS)]
 
 
-def encode(once: tuple[int, ...], or_region: bool = False) -> tuple[Cnf, list]:
+def encode(once: tuple[int, ...], or_region: bool = False, pair_first_or: bool = False) -> tuple[Cnf, list]:
     cnf = Cnf()
     one = cnf.fresh()
     cnf.clause(one)
@@ -69,6 +69,8 @@ def encode(once: tuple[int, ...], or_region: bool = False) -> tuple[Cnf, list]:
                 cnf.clause(*choice, op)
         for x in range(INPUTS):
             for chosen, other in ((left[x], b), (right[x], a)):
+                if pair_first_or and x in (3, 7):
+                    cnf.clause(-chosen, op)
                 for j in range(ROWS):
                     if j == x % ROWS:
                         continue
@@ -133,11 +135,13 @@ def main() -> None:
     parser.add_argument("--ports", choices=("all-once", "pair-once", "any"), default="all-once")
     parser.add_argument("--or-region", action="store_true",
                         help="also forbid the two ports meeting along unshared OR paths")
+    parser.add_argument("--pair-first-or", action="store_true",
+                        help="require both ports of the examined pair to enter OR gates")
     parser.add_argument("--solver", type=Path, required=True)
     parser.add_argument("--seconds", type=int, default=45)
     args = parser.parse_args()
     ports = {"all-once": tuple(range(INPUTS)), "pair-once": (3, 7), "any": ()}
-    cnf, topology = encode(ports[args.ports], args.or_region)
+    cnf, topology = encode(ports[args.ports], args.or_region, args.pair_first_or)
     cnf.write(args.output)
     result = subprocess.run(["/usr/bin/nice", "-n", "8", str(args.solver), "-q", "-t", str(args.seconds),
                              str(args.output)], capture_output=True, text=True, timeout=args.seconds + 15)

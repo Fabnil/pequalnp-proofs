@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from itertools import combinations
 from pathlib import Path
 import subprocess
@@ -87,7 +88,20 @@ def unequal(cnf: Cnf, old: list[int], new: list[int], tests: list[int], one: int
     return differences
 
 
-def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[tuple[int, ...]]]:
+def retained_after_pruning(cnf: Cnf, num_vars: int, reads: list[list[int]],
+                           signal_present: list[int], operand_present: Sequence[tuple[int, ...]]) -> list[int]:
+    root = len(signal_present) - 1
+    needed = {root: signal_present[root]}
+    for i in reversed(range(root)):
+        routes = [cnf.conjunction(g[i], needed[num_vars + j])
+                  for j, g in enumerate(reads) if i < len(g)]
+        needed[i] = cnf.conjunction(signal_present[i], cnf.disjunction(*routes))
+    return [cnf.conjunction(needed[num_vars + j], *ops) for j, ops in enumerate(operand_present)]
+
+
+def encode(
+    size: int, shape: tuple[int, int, int], *, expose_pairs: bool = False,
+) -> tuple[Cnf, Topology, list[tuple[int, ...]]]:
     groups = grouped_inputs(shape)
     num_seeds = shape[0] + shape[1]
     num_vars = len(groups)
@@ -105,13 +119,27 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
         if singles[b] == singles[a] + ROWS
     }
     forbidden = {}
-    for i, x in singles.items():
-        side = x // ROWS
-        neighbors = {p[1 - side] for p in CELLS if p[side] == x and edge(p)}
-        compare = {cells[p] for p in CELLS if p[1 - side] in neighbors and not edge(p)}
-        singletons = {point_index[(j,)] for j, group in enumerate(groups)
-                      if any(y != x and y // ROWS == side for y in group)}
-        forbidden[i] = compare | singletons
+    neighbor_tests = {}
+    four_seed_bound = size == 19 and num_seeds == 4 and expose_pairs
+    for i, originals in enumerate(groups):
+        if i not in singles and not four_seed_bound:
+            continue
+        forbidden[i] = set()
+        neighbors = set()
+        for x in originals:
+            side = x // ROWS
+            adjacent = {p[1 - side] for p in CELLS if p[side] == x and edge(p)}
+            neighbors.update(adjacent)
+            comparisons = (cells[p] for p in CELLS if p[1 - side] in adjacent and not edge(p))
+            singletons = (point_index[(j,)] for j, group in enumerate(groups)
+                          if any(y != x and y // ROWS == side for y in group))
+            if four_seed_bound:
+                forbidden[i].update(comparisons)
+                forbidden[i].update(singletons)
+            else:
+                forbidden[i] = set(comparisons) | set(singletons)
+        if i not in singles:
+            neighbor_tests[i] = [point_index[(j,)] for j, group in enumerate(groups) if neighbors.intersection(group)]
 
     cnf = Cnf()
     one = cnf.fresh()
@@ -123,42 +151,92 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
     redundant: list[list[int]] = [[], []]
     operand_present: list[list[tuple[int, int]]] = [[], []]
     signal_present = [[cnf.disjunction(*(row[p] for p in positive[b])) for row in wires] for b in range(2)]
-    three_seed_bound = size == 19 and num_seeds == 3
-    if three_seed_bound:
-        seed_only = [one] * 3 + [-one] * (num_vars - 3)
-        first_argument = [-one] * num_vars
+    maximal_pairing = size == 19
+    if maximal_pairing:
+        forked = [-one if i in singles else cnf.fresh() for i in range(num_vars + num_gates - 1)]
+        exposed = [one if expose_pairs or i in singles else -one for i in range(num_vars)]
+    three_seed_bound = maximal_pairing and num_seeds == 3
+    if three_seed_bound or four_seed_bound:
+        seed_only = [one] * num_seeds + [-one] * (num_vars - num_seeds)
         first_attachment = []
+        seed_singletons = [point_index[(i,)] for i in range(num_seeds)]
+        pure_positive = [p for tests in positive for p in tests if min(points[p]) >= num_seeds]
+        pure_wires = [cnf.disjunction(*(row[p] for p in pure_positive)) for row in wires]
+        pure_operands = []
+    if three_seed_bound:
+        first_argument = [-one] * num_vars
         attachable = [i for i, x in singles.items() if x < 4 or x >= 12]
         ab, ac, bc = (point_index[p] for p in ((0, 1), (0, 2), (1, 2)))
-        seed_singletons = [point_index[(i,)] for i in range(3)]
+    if four_seed_bound:
+        orient = (range(shape[0]), range(shape[0], num_seeds))
+        same_orientation = [[point_index[p] for p in combinations(indices, 2)] for indices in orient]
+        seed_pairs = [point_index[(i, j)] for i in orient[0] for j in orient[1]]
+        seed_edges = [t for t in seed_pairs if target[t]]
+        seed_diagonals = [t for t in seed_pairs if not target[t]]
+        port_orientation = [[i for i, x in singles.items() if (x // ROWS != block(x)) == bool(k)]
+                            for k in range(2)]
+        by_orientation = [[-one] * num_vars for _ in range(2)]
 
     for index in range(num_gates):
         (left, right, is_or), (a, c), out = gate(cnf, wires)
         topology.append((left, right, is_or))
         reads.append([cnf.disjunction(l, r) for l, r in zip(left, right)])
+        direct_diagonals = {(i, j): cnf.conjunction(left[i], right[j]) for i, j in diagonal}
+        if maximal_pairing:
+            carries = [cnf.disjunction(*(cnf.conjunction(chosen, carries_port, -forked[i])
+                                         for i, (chosen, carries_port) in enumerate(zip(operand, exposed))))
+                       for operand in (left, right)]
+            direct_diagonal = cnf.disjunction(*direct_diagonals.values())
+            cnf.clause(-is_or, -carries[0], -carries[1], direct_diagonal)
+            carry = cnf.disjunction(*carries)
+            exposed.append(cnf.conjunction(is_or, carry) if expose_pairs else
+                           cnf.conjunction(is_or, -direct_diagonal, carry))
         if three_seed_bound:
             pure_arg = cnf.disjunction(*(left[i] for i in attachable))
             mixed_arg = cnf.disjunction(*(cnf.conjunction(right[i], first_argument[i])
                                           for i in range(num_vars, len(wires))))
             first_attachment.append(cnf.conjunction(pure_arg, mixed_arg))
+        if four_seed_bound:
+            for raw_ports, possible in zip(port_orientation, by_orientation):
+                pure_arg = cnf.disjunction(*(left[i] for i in raw_ports))
+                mixed_arg = cnf.disjunction(*(cnf.conjunction(right[i], possible[i])
+                                              for i in range(num_vars, len(wires))))
+                first_attachment.append(cnf.conjunction(pure_arg, mixed_arg))
+        if three_seed_bound or four_seed_bound:
             seeded = [cnf.disjunction(*(cnf.conjunction(chosen, only)
                                         for chosen, only in zip(operand, seed_only)))
                       for operand in (left, right)]
             seed_only.append(cnf.conjunction(*seeded))
+        if three_seed_bound:
             only_bc = cnf.conjunction(-out[ac], out[bc])
             only_ac = cnf.conjunction(out[ac], -out[bc])
             pair_support = only_bc if shape[2] else cnf.disjunction(only_ac, only_bc)
             first_argument.append(cnf.conjunction(seed_only[-1], out[ab], pair_support,
                                                   *(-out[i] for i in seed_singletons)))
+        if four_seed_bound:
+            positive_pair = cnf.disjunction(*(out[t] for t in seed_edges))
+            negative_pair = [cnf.disjunction(*(out[t] for t in tests)) for tests in same_orientation]
+            base = cnf.conjunction(seed_only[-1], positive_pair, *(-out[t] for t in seed_singletons + seed_diagonals))
+            for k in range(2):
+                by_orientation[k].append(cnf.conjunction(base, negative_pair[k], -negative_pair[1 - k]))
+        if three_seed_bound or four_seed_bound:
+            pure_wires.append(cnf.disjunction(*(out[p] for p in pure_positive)))
+            pure_operands.append(tuple(cnf.disjunction(*(v[p] for p in pure_positive)) for v in (a, c)))
         cnf.clause(*(out[t] for tests in positive for t in tests))
         unsafe = cnf.disjunction(*(out[t] for t in negative))
         for operand in (a, c):
             cnf.clause(-is_or, -unsafe, *(operand[t] for t in negative))
         for i, forbidden_tests in forbidden.items():
             for selected, other in ((left[i], c), (right[i], a)):
-                cnf.clause(-selected, is_or)
-                for t in forbidden_tests:
-                    cnf.clause(-selected, -other[t])
+                if i in singles:
+                    cnf.clause(-selected, is_or)
+                    for t in forbidden_tests:
+                        cnf.clause(-selected, -other[t])
+                else:
+                    for t in forbidden_tests:
+                        cnf.clause(-selected, forked[i], -is_or, -other[t])
+                    for t in neighbor_tests[i]:
+                        cnf.clause(-selected, forked[i], is_or, other[t])
         for i, j in combinations(range(num_vars), 2):
             if (i in singles or j in singles) and (i, j) not in diagonal:
                 cnf.clause(-left[i], -right[j])
@@ -169,7 +247,7 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
             cnf.clause(is_or, a_top)
             cnf.clause(is_or, c_top)
             cnf.clause(-a_top, a[q], -c[q], c_top)
-            allowed = [cnf.conjunction(left[i], right[j]) for i, j in diagonal if block(singles[i]) == b]
+            allowed = [flag for (i, _), flag in direct_diagonals.items() if block(singles[i]) == b]
             cnf.clause(-out[p], out[q], *allowed)
             retained = cnf.conjunction(a_top, c_top)
             top_retained[b].append(retained)
@@ -187,8 +265,15 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
             cnf.clause(left[-1], right[-1], smaller_table(cnf, wires[-1][:-2], out[:-2], -one))
         wires.append(out)
 
-    if three_seed_bound:
+    if three_seed_bound or four_seed_bound:
         cnf.clause(*first_attachment)
+        pure_kept = retained_after_pruning(cnf, num_vars, reads, pure_wires, pure_operands)
+        essential = {i for p in pure_positive for i in points[p]}
+        has_missing_corner = three_seed_bound or shape == (2, 2, 1)
+        pure_minimum = len(essential) - 1 + int(has_missing_corner)
+        cnf.at_most([-present for present in pure_kept], num_gates - pure_minimum)
+        pure_ands = [cnf.conjunction(present, -is_or) for present, (_, _, is_or) in zip(pure_kept, topology)]
+        cnf.at_most([-present for present in pure_ands], num_gates - (2 if has_missing_corner else 1))
     for i, expected in enumerate(target):
         cnf.clause(wires[-1][i] if expected else -wires[-1][i])
     for i in range(num_vars + num_gates - 1):
@@ -196,17 +281,19 @@ def encode(size: int, shape: tuple[int, int, int]) -> tuple[Cnf, Topology, list[
         cnf.clause(*used)
         if i in singles:
             cnf.at_most(used, 1)
+        elif maximal_pairing:
+            if len(used) == 1:
+                cnf.clause(-forked[i])
+            else:
+                cnf.at_most(used, 1, escape=forked[i])
+                cnf.at_most([-use for use in used], len(used) - 2, escape=-forked[i])
+    if maximal_pairing:
+        cnf.at_most([forked[i] for i in range(num_vars + num_gates - 1) if i not in singles], 4)
     for b in range(2):
         cnf.at_most(top_retained[b], size - 8)
         cnf.at_most([-present for present in top_retained[b]], 8 - num_seeds)
         cnf.at_most(redundant[b], size - 19)
-        root = num_vars + num_gates - 1
-        needed = {root: signal_present[b][root]}
-        for i in reversed(range(root)):
-            routes = [cnf.conjunction(g[i], needed[num_vars + j])
-                      for j, g in enumerate(reads) if i < len(g)]
-            needed[i] = cnf.conjunction(signal_present[b][i], cnf.disjunction(*routes))
-        kept = [cnf.conjunction(needed[num_vars + j], *ops) for j, ops in enumerate(operand_present[b])]
+        kept = retained_after_pruning(cnf, num_vars, reads, signal_present[b], operand_present[b])
         cnf.at_most([-present for present in kept], num_gates - 11)
     return cnf, topology, groups
 
@@ -235,9 +322,19 @@ def main() -> None:
     parser.add_argument("directory", type=Path)
     parser.add_argument("--solver", type=Path, required=True)
     parser.add_argument("--seconds", type=int, default=60)
+    parser.add_argument("--shape", type=int, nargs=3, action="append", metavar=("P", "Q", "OVERLAP"),
+                        help="select a case of the given number of pairs; may be repeated")
+    parser.add_argument("--expose-pairs", action="store_true",
+                        help="apply the OR-region constraint to paired and individual ports at size 19")
     args = parser.parse_args()
-    for shape in shapes(args.pairs):
-        cnf, topology, groups = encode(args.size, shape)
+    all_shapes = shapes(args.pairs)
+    selected = [tuple(shape) for shape in args.shape] if args.shape else all_shapes
+    if any(shape not in all_shapes for shape in selected):
+        parser.error(f"the available shapes for {args.pairs} pairs are {all_shapes}")
+    if args.expose_pairs and args.size != 19:
+        parser.error("--expose-pairs applies only at size 19")
+    for shape in selected:
+        cnf, topology, groups = encode(args.size, shape, expose_pairs=args.expose_pairs)
         key = "-".join(map(str, shape))
         path = args.directory / f"partial-{args.size}-{key}.cnf"
         cnf.write(path)
