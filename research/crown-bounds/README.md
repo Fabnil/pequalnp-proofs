@@ -47,3 +47,17 @@ for gates in 10 11 12; do
 done
 python3 crown_quotient_formulas.py --seconds 35
 ```
+
+## Partial cross-block pairings
+
+With six or more cross-block ORs whose original arguments are used just once, choose which of the unmerged ports to keep so every quotient pair can still be tested. Removing the other ports reduces any size-20 circuit in this class to the strict eight-wire quotient with at most 12 gates, which is impossible. Lean checks coverage of the pair tests and the deduction of singleton tests. [Coverage lemma](CrownQuotient.lean#L52) · [Proof](crown-quotient.md#шесть-и-семь-объединений)
+
+With five such ORs, one negative same-side pair can be left unchecked. A circuit missing only that test still needs at least 12 gates. This excludes five such ORs at size 19, and at size 20 if any original input is read repeatedly. The complete size-20 question remains open. [One-missing-test proof](crown-quotient.md#пять-объединений-и-один-пропущенный-тест)
+
+The following commands reproduce the finite part of the 12-gate lower bound, by testing the strict quotient with one extra same-side edge. The strict quotient itself has the previously established 13-gate lower bound.
+
+```sh
+python3 crown_quotient_formulas.py --extra-edge --repeats 3
+python3 crown_quotient_formulas.py --extra-edge --repeats 4
+python3 crown_quotient_sat.py 11 quotient-runs --extra-edge --only-count 3 --solver "$(command -v cadical)"
+```

@@ -17,21 +17,30 @@ POSITIVES = tuple(i for i, value in enumerate(TARGET) if value)
 NEGATIVES = tuple(i for i, value in enumerate(TARGET) if not value)
 EDGES = {TESTS[i] for i in POSITIVES}
 Topology = list[tuple[list[int], list[int], int]]
+EXTRA_EDGE = (6, 7)
 
 
-def repeated_sets(count: int) -> list[tuple[int, ...]]:
+def repeated_sets(count: int, extra_edge: tuple[int, int] | None = None) -> list[tuple[int, ...]]:
     """One representative under simultaneous relabeling and side exchange."""
     representatives = []
     seen = set()
-    relabelings = tuple(permutations(range(4)))
+    relabelings = [
+        tuple(labels[w % 4] + 4 * ((w // 4) ^ exchange) for w in range(INPUTS))
+        for labels in permutations(range(4)) for exchange in (0, 1)
+    ]
+    if extra_edge is not None:
+        relabelings = [p for p in relabelings if tuple(sorted(p[w] for w in extra_edge)) == extra_edge]
     for repeated in combinations(range(INPUTS), count):
         if repeated in seen:
             continue
         representatives.append(repeated)
-        for labels in relabelings:
-            for exchange in (0, 1):
-                seen.add(tuple(sorted(labels[w % 4] + 4 * ((w // 4) ^ exchange) for w in repeated)))
+        seen.update(tuple(sorted(p[w] for w in repeated)) for p in relabelings)
     return representatives
+
+
+def graph(extra_edge: tuple[int, int] | None) -> tuple[set[tuple[int, int]], tuple[bool, ...]]:
+    edges = EDGES if extra_edge is None else EDGES | {extra_edge}
+    return edges, tuple(sample in edges for sample in TESTS)
 
 
 def smaller_table(cnf: Cnf, before: list[int], after: list[int], false: int) -> int:
@@ -43,11 +52,20 @@ def smaller_table(cnf: Cnf, before: list[int], after: list[int], false: int) -> 
     return less
 
 
-def encode(size: int, repeated: tuple[int, ...]) -> tuple[Cnf, Topology]:
+def encode(size: int, repeated: tuple[int, ...],
+           extra_edge: tuple[int, int] | None = None) -> tuple[Cnf, Topology]:
     cnf = Cnf()
     one = cnf.fresh()
     cnf.clause(one)
     tables = [[one if wire in test else -one for test in TESTS] for wire in range(INPUTS)]
+    edges, target = graph(extra_edge)
+    accepted = tuple(i for i, result in enumerate(target) if result)
+    rejected = tuple(i for i, result in enumerate(target) if not result)
+    neighbors = [{b if a == w else a for a, b in edges if w in (a, b)} for w in range(INPUTS)]
+    if any(len(n) < 3 for n in neighbors) or any(
+        a <= b for i, a in enumerate(neighbors) for j, b in enumerate(neighbors) if i != j
+    ):
+        raise ValueError("the raw-read constraints require three neighbors and incomparable neighborhoods")
     topology: Topology = []
     reads = []
 
@@ -82,26 +100,25 @@ def encode(size: int, repeated: tuple[int, ...]) -> tuple[Cnf, Topology]:
 
         # Retain only gates that matter on a positive test. Among minima,
         # choose a representative that moves safe OR operands to the output.
-        cnf.clause(*(output[p] for p in POSITIVES))
-        unsafe = cnf.disjunction(*(output[p] for p in NEGATIVES))
+        cnf.clause(*(output[p] for p in accepted))
+        unsafe = cnf.disjunction(*(output[p] for p in rejected))
         for operand in (a_bits, b_bits):
-            cnf.clause(-is_or, -unsafe, *(operand[p] for p in NEGATIVES))
+            cnf.clause(-is_or, -unsafe, *(operand[p] for p in rejected))
 
         for a, b in combinations(range(INPUTS), 2):
             if a not in repeated or b not in repeated:
                 cnf.clause(-left[a], -right[b])
-            elif (a, b) not in EDGES:
+            elif (a, b) not in edges:
                 cnf.clause(-left[a], -right[b], is_or)
         for wire in range(INPUTS):
             if wire in repeated:
                 continue
-            neighbors = {b if a == wire else a for a, b in EDGES if wire in (a, b)}
             for selectors, other in ((left, b_bits), (right, a_bits)):
                 if gate < 2:
                     cnf.clause(-selectors[wire])
                 for y in range(INPUTS):
                     cnf.clause(-selectors[wire], -is_or, -other[y])
-                    if y in neighbors:
+                    if y in neighbors[wire]:
                         cnf.clause(-selectors[wire], is_or, other[y])
         for wire in tables[:INPUTS]:
             cnf.clause(*(b if a == -one else -b for a, b in zip(wire, output)))
@@ -120,12 +137,12 @@ def encode(size: int, repeated: tuple[int, ...]) -> tuple[Cnf, Topology]:
             else:
                 cnf.at_most(uses, 1)
     cnf.at_most([use for gate in reads for use in gate[:INPUTS]], size + 1)
-    for output, result in zip(tables[-1], TARGET):
+    for output, result in zip(tables[-1], target):
         cnf.clause(output if result else -output)
     return cnf, topology
 
 
-def decode(output: str, topology: Topology) -> list[tuple[bool, int, int]]:
+def decode(output: str, topology: Topology, target: tuple[bool, ...]) -> list[tuple[bool, int, int]]:
     truth = {int(token) for line in output.splitlines() if line.startswith("v ")
              for token in line[2:].split() if int(token) > 0}
     gates = []
@@ -133,7 +150,7 @@ def decode(output: str, topology: Topology) -> list[tuple[bool, int, int]]:
         a, = (i for i, flag in enumerate(left) if flag in truth)
         b, = (i for i, flag in enumerate(right) if flag in truth)
         gates.append((op in truth, a, b))
-    for test, expected in zip(TESTS, TARGET):
+    for test, expected in zip(TESTS, target):
         wires = [i in test for i in range(INPUTS)]
         for is_or, a, b in gates:
             wires.append((wires[a] or wires[b]) if is_or else (wires[a] and wires[b]))
@@ -142,12 +159,12 @@ def decode(output: str, topology: Topology) -> list[tuple[bool, int, int]]:
     return gates
 
 
-def run(solver: Path, path: Path, seconds: int, topology: Topology) -> str:
+def run(solver: Path, path: Path, seconds: int, topology: Topology, target: tuple[bool, ...]) -> str:
     result = subprocess.run(["/usr/bin/nice", "-n", "8", str(solver), "-q", "-t", str(seconds),
                             str(path)], text=True, capture_output=True, timeout=seconds + 15)
     lines = result.stdout.splitlines()
     if result.returncode == 10 and "s SATISFIABLE" in lines:
-        print(decode(result.stdout, topology), flush=True)
+        print(decode(result.stdout, topology, target), flush=True)
         return "SAT"
     if result.returncode == 20 and "s UNSATISFIABLE" in lines:
         return "UNSAT"
@@ -162,14 +179,22 @@ def main() -> None:
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--solver", type=Path, required=True)
     parser.add_argument("--seconds", type=int, default=12)
+    parser.add_argument("--extra-edge", action="store_true", help="also accept the pair (6, 7)")
+    parser.add_argument("--only-count", type=int, choices=(3, 4, 5))
     args = parser.parse_args()
-    for count in range(3, args.size - 6):
-        for repeated in repeated_sets(count):
-            cnf, topology = encode(args.size, repeated)
+    extra = EXTRA_EDGE if args.extra_edge else None
+    _, target = graph(extra)
+    prefix = "quotient-extra" if extra is not None else "quotient"
+    counts = range(3, args.size - 6)
+    if args.only_count is not None and args.only_count not in counts:
+        parser.error("the repeat count is incompatible with this size")
+    for count in (counts if args.only_count is None else (args.only_count,)):
+        for repeated in repeated_sets(count, extra):
+            cnf, topology = encode(args.size, repeated, extra)
             key = sum(1 << i for i in repeated)
-            path = args.run_dir / f"quotient-{args.size}-{key:02x}.cnf"
+            path = args.run_dir / f"{prefix}-{args.size}-{key:02x}.cnf"
             cnf.write(path)
-            result = run(args.solver, path, args.seconds, topology)
+            result = run(args.solver, path, args.seconds, topology, target)
             print(f"{args.size} {key:02x} {repeated} {result}", flush=True)
             if result == "SAT":
                 return

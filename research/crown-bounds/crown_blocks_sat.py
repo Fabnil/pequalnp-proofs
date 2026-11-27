@@ -96,6 +96,16 @@ def encode(size: int) -> tuple[Cnf, list[tuple[list[int], list[int], int]]]:
     positive_operands = []
     raw_picks = []
     merges = {point: cnf.fresh() for point in CELLS if not edge(point)}
+    cross_merges = [flag for (row, col), flag in merges.items() if block(row) != block(col)]
+    # Six merges allow the full strict quotient. Five allow a quotient
+    # with one unchecked same-side pair, which still needs twelve gates.
+    if size == 19:
+        cnf.at_most(cross_merges, 4)
+    else:
+        cnf.at_most(cross_merges, 5)
+        # Any repeated raw port is outside a single-use merge. It can be
+        # selected among the deleted ports, saving an additional gate.
+        cnf.at_most(cross_merges, 4, escape=-cnf.disjunction(*repeat))
 
     # Two sole-use raw ORs cannot identify samples with different answers.
     for ((r, c), first), ((s, d), second) in combinations(merges.items(), 2):

@@ -19,3 +19,5 @@ import CrownQuotient
 #print axioms CrownBlocks.twoUpper21
 #print axioms CrownBlocks.fourUpper43
 #print axioms CrownQuotient.pairedPromise_iff
+#print axioms CrownQuotient.visible_of_missing_le_two
+#print axioms CrownQuotient.quotient_of_visible
