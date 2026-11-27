@@ -58,4 +58,4 @@ There are therefore at least three missing edges off $\ell_0$, each at a distinc
 
 Each clean missing line $\ell$ has three retained neighbors outside $S$. Their tests start with its good AND $h_\ell$, which is later than $g$ because the missing tests require a leaf reached after $g$. After $h_\ell$ these three tests share its destination and add disjoint extra good leaf sets. The operands of $g$ are inert at this point, and the tests do not add a third erased position, since its point-side raw reach, if any, is confined to $S$. A rejecting baseline from that destination would need three waiting centers and can have at most one. Thus the destination of $h_\ell$ accepts alone. A different missing point $x'$ in $S$ also reaches the common $T$, and pairing it with $\ell$ accepts a nonedge. This contradiction excludes singleton line triggers.
 
-The remaining possibilities have either more than twelve centers or all twelve line centers with a singleton point trigger.
+The [follow-up](first-star-five-twelve.md) excludes the all-line distribution as well. Any remaining five-edge case has more than twelve centers.
