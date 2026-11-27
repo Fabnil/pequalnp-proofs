@@ -214,6 +214,12 @@ theorem sevenUpper77 : RepSizeAtMost (adj (blocks := 7)) 77 :=
   upperOfChecks sevenWitness (monotoneOfGateCheck (by decide)) (by decide)
     (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
 
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 600000 in
+theorem eightUpper87 : RepSizeAtMost (adj (blocks := 8)) 87 :=
+  upperOfChecks (pairedWitness 4) (monotoneOfGateCheck (by decide)) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
 /-- The ORs of inputs 3 and 7 meet indirectly through wires 12 and 13. -/
 def crownFourWithoutFourthPair : Circuit :=
   ⟨[⟨.or, [0, 4]⟩, ⟨.or, [1, 5]⟩, ⟨.or, [2, 6]⟩,

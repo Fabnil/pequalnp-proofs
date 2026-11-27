@@ -33,6 +33,7 @@ import CrownDemand
 #print axioms CrownBlocks.fiveUpper55
 #print axioms CrownBlocks.sixUpper65
 #print axioms CrownBlocks.sevenUpper77
+#print axioms CrownBlocks.eightUpper87
 #print axioms CrownBlocks.singleLayeredUpper11
 #print axioms CrownBlocks.crownFourWithoutFourthPair_correct
 #print axioms CrownBlocks.AfterThreePairs.adj_restrict
