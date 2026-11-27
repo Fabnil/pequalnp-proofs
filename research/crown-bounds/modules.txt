@@ -79,3 +79,5 @@ CrownDemand
 CrownMissingCell
 CrownMixed
 CyclePromise
+PlaneCompletion
+PlaneRobustCover

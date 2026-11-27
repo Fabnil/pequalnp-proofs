@@ -1,4 +1,4 @@
-# Monotone circuit bounds for crowns
+# Monotone circuit bounds for crowns, cycles, and incidence graphs
 
 The model is `PEqualNP.Represents.RepSizeAtMost`. The circuit uses fan-in-two AND/OR gates and has to agree with the bipartite adjacency matrix only when exactly one left input and one right input are on. For the crown of size `n` on each side, the adjacency test is `u ≠ v`.
 
@@ -15,6 +15,10 @@ The combined mathematical and computational arguments give exact sizes 38, 41, 4
 
 Removing one positive cell from a five-by-five crown leaves a graph of exact minimum size 15. The transposed OR graph excludes 14 gates without a depth restriction. Lean checks the neighborhood inclusions and a 15-gate circuit in the original input order of mask `32435687`. [Combinatorial proof](crown-missing-cell.md) · [Lean witness](CrownMissingCell.lean#L46) · [Desk row L-meta-25467](https://pequalnp.com/desk/row?gap=L-meta-25467)
 
+## Incidence graph after deleting one line
+
+For a graph without a four-cycle, the stars obtained from the two raw OR-only operand sets of certain AND gates give a circuit lower bound. It counts the edges and a vertex cover of the union of these stars, plus the erased raw operand positions. For L-meta-9737, at least three edges must lie outside these stars in any 58-gate circuit. If a minimum circuit leaves exactly three edges outside them, a unique AND fires first on those edges and also fires from a singleton input. Lean checks the 59-gate construction and the robust matching fact used in the bound. [Proof](first-star-cover.md) · [Lean certificate](PlaneRobustCover.lean) · [Desk row](https://pequalnp.com/desk/row?gap=L-meta-9737)
+
 ## Reproduction
 
 Use the toolchain pinned by `lean/lean-toolchain`. From the repository root, run the following commands. `modules.txt` orders the research modules by dependency. The final command prints the axioms used by the named theorems.
@@ -24,7 +28,8 @@ cd lean
 lake exe cache get
 lake build PEqualNP.Defs PEqualNP.Defs.Represents \
   PEqualNP.MetaComplexity.Helpers.LowMergeWires \
-  PEqualNP.MetaComplexity.Helpers.TableSearch PEqualNP.Outside.L_meta_18677
+  PEqualNP.MetaComplexity.Helpers.TableSearch PEqualNP.MetaComplexity.L154 \
+  PEqualNP.Outside.L_meta_18677
 bounds=../research/crown-bounds
 while IFS= read -r mod; do
   lake env lean -R "$bounds" -o ".lake/build/lib/lean/$mod.olean" "$bounds/$mod.lean" || exit

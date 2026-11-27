@@ -15,6 +15,7 @@ import CrownDemand
 import CrownMissingCell
 import CrownMixed
 import CyclePromise
+import PlaneRobustCover
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -71,3 +72,5 @@ import CyclePromise
 #print axioms CyclePromise.twelveUpper16
 #print axioms CyclePromise.sixteenUpper21
 #print axioms CyclePromise.mixedOddUpper61
+#print axioms PlaneCompletion.upperBound59
+#print axioms PlaneCompletion.minCoverAfterThree
