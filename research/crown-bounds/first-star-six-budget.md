@@ -71,7 +71,7 @@ If two degree-three points are isolated, all remaining points keep their origina
 
 The last possibility in this case is $k=0$, with all line centers. For an isolated point $v$, count together the tracked positions and all target leaves $L_\ell$ for $\ell\in N_G(v)$ ever emitted on its singleton. A support with a target leaf contains no tracked position and at most one target leaf, since it lies in one raw point support and any other point shares at most one line with $v$. As in the [five-edge isolated-point count](first-star-five.md#there-is-no-isolated-point), the combined count is at most $J$, the number of fully raw-reachable nonadmissible gates firing on the singleton. Adding a missing line either uses its target leaf, a waiting tracked position, or an unfired fully raw-reachable gate. Each of the latter possibilities can serve at most one neighbor since those lines have disjoint raw center slots and tight erasure permits no shared erased position across them. This serves at most $J+(M-J)=M$ neighbors, below three.
 
-Thus no twelve-center case with matching deficiency attains equality.
+Thus no twelve-center case with matching deficiency attains equality. The [isolated-line follow-up](first-star-six-isolated.md) excludes an isolated line at every center count, including when the bound is loose.
 
 ## Isolated vertices at larger center counts
 
