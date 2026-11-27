@@ -64,4 +64,4 @@ If $v_0=u$ and all centers are points, $y$ is a line. Since $d,e$ each reach raw
 
 Here $\Delta=0$ and the erased components each have one outlet. The positions of $D(v)$ are private, and some missed edge away from $v$ needs a fully raw-reachable gate avoiding them. This leaves at most two positions in $D(v)$. A two-position isolated support consisting of both operands of another gate would need two pure unions and hence a cycle. Therefore every fully raw-reachable gate is missing an operand at $v$. Each such operand can reach at most one of the four neighbors of $v$ through its one outlet, even counting center neighbors. Only those gates can fire first on the four missing edges at $v$, and there are at most two of them.
 
-Thus $H$ meets every line. Cases with isolated points or with a spanning $H$ remain.
+Thus $H$ meets every line. The [two-point follow-up](first-star-six-two-points.md) also excludes two isolated points.
