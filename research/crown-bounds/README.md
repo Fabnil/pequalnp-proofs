@@ -11,7 +11,7 @@ The model is `PEqualNP.Represents.RepSizeAtMost`. The circuit uses fan-in-two AN
 
 Lean also checks the lower bound `3*n + 4` for every `n ≥ 10` and a circuit of size 55 for `n = 16`. [General bound](CrownTenExact.lean#L54) · [55-gate circuit](CrownGridBounds.lean#L127)
 
-The exclusion of 54 gates at `n = 16` relies on finite computations in Python and Z3. This branch contains the Lean-checked reduction and normalization lemmas for that result. The finite exclusion appears as a hypothesis in the Lean statement, and the computational argument was reported separately. [Conditional lower bound](CrownSixteenFrontier.lean#L58) · [Project discussion](https://github.com/open-goat/pequalnp-proofs/discussions/38248)
+The combined mathematical and computational arguments give exact sizes 38, 41, 45 and 55 at side lengths 11, 12, 13 and 16. The lower bounds use finite computations in Python and Z3 in addition to the Lean reductions. At `n = 16`, the lower bound excludes 38 gates for threshold two on 16 inputs, which excludes 54 gates for the crown and implies the bound `3*n + 7` for every `n ≥ 16`. The finite exclusion appears as a hypothesis in the Lean lower-bound theorem. [Conditional lower bound](CrownSixteenFrontier.lean#L58) · [Proof for size 16](crown-sixteen.md) · [Project discussion](https://github.com/open-goat/pequalnp-proofs/discussions/38248)
 
 ## Reproduction
 
@@ -29,6 +29,42 @@ while IFS= read -r mod; do
 done < "$bounds/modules.txt"
 lake env lean -R "$bounds" "$bounds/Audit.lean"
 ```
+
+## Finite profile checks for sizes 11, 13 and 16
+
+Run these commands from `research/crown-bounds` with Python 3 and Z3 4.16.0 on `PATH`. The commands use a separate directory for generated systems and results. Each run keeps satisfiable or unresolved cases in JSON for inspection and refinement.
+
+```sh
+export CROWN_RUNS="$PWD/profile-runs"
+python3 crown11_or_profiles.py
+python3 crown11_and_profiles.py
+python3 crown13_profiles.py or
+python3 crown13_matching_output.py
+python3 crown13_profiles.py and
+python3 crown13_profiles.py refine
+```
+
+The arguments for the finite checks and the mathematical elimination of their listed residual layouts are in the notes for [size 11](crown-eleven.md) and [size 13](crown-thirteen.md). In the size-13 output check, 54 of the 30,240 formulas meet the first conditions, and none passes all the tests.
+
+For size 16, the graph generators enumerate all possible counts of shared signals and all positions of the first shared formula with an AND. The refinement steps check values on pairs and divide remaining cases by the singleton profiles witnessing the first AND.
+
+```sh
+python3 crown16_profiles.py or
+for stages in 4 5 6 7; do
+  python3 crown16_profiles.py and "$stages" || exit
+  for first in $(seq 3 "$stages"); do
+    python3 crown16_profiles.py refine "$first" "$stages" --timeout 2500 || exit
+    python3 crown16_profiles.py refine "$first" "$stages" --pending --pair-models --timeout 10000 || exit
+  done
+done
+python3 crown16_profiles.py refine 3 7 --pending --triples --timeout 10000
+python3 crown16_profiles.py split 4 7 --timeout 1500
+python3 crown16_profiles.py split 4 7 --exclusive --timeout 1500
+python3 crown16_profiles.py split 4 7 --both-sides --timeout 1500
+python3 crown16_profiles.py split 4 7 --both-sides --pending --pair-models --timeout 10000
+```
+
+These commands use the current constraints from the first pass. Counts left by each pass can vary with the solver and time limits. To reproduce the exclusion, the final split output `crown16_split_7_4_both.json` and each `crown16_refined_<stages>_<first>.json` outside the `(7,4)` split must be empty lists. Increase the timeout on any unresolved cases using the corresponding `--pending` command. The notes record the original run, including the final 22 split branches and their `unsat` results. [Size-16 proof and run counts](crown-sixteen.md)
 
 ## Disjoint four-by-four crowns
 
