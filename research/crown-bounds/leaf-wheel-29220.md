@@ -4,7 +4,7 @@ The graph in [L-meta-29220](https://pequalnp.com/desk/row?gap=L-meta-29220) is a
 
 ## Lower bound
 
-The pendant vertices are 2 and 3, attached to 5 and 6 respectively. On clearing 2, the remaining inputs in the order \((0,1,3,5,4,6,7)\) give exactly the seven-vertex edge function in `L_meta_10890_aux.final`. That theorem gives a lower bound of 12 gates over the unrestricted three-gate basis. The graph automorphism \((0\ 1)(2\ 3)(5\ 6)\) gives the same bound on clearing 3. [Accepted proof](https://github.com/open-goat/pequalnp-proofs/blob/a4e197c6a09356bd4ffa5f513bf729729e2ef76e/lean/PEqualNP/Outside/L_meta_10890.lean#L2707) · [Kernel check of the relabeling](LeafWheel29220.lean)
+The pendant vertices are 2 and 3, attached to 5 and 6 respectively. On clearing 2, the remaining inputs in the order \((0,1,3,5,4,6,7)\) give exactly the seven-vertex edge function in `L_meta_10890_aux.final`. That theorem gives a lower bound of 12 gates over the unrestricted three-gate basis. Lean checks the relabeling for each leaf, using the reflection \((0\ 1)(2\ 3)(5\ 6)\) for vertex 3. Lean also proves the 13-gate lower bound and the two distinct OR-reader conditions for normalized circuits. [Accepted seven-vertex proof](https://github.com/open-goat/pequalnp-proofs/blob/a4e197c6a09356bd4ffa5f513bf729729e2ef76e/lean/PEqualNP/Outside/L_meta_10890.lean#L2707) · [Formal proof](LeafWheel29220.lean)
 
 Each pendant input is essential, as witnessed by the pair consisting of that pendant and its neighbor. The output is a gate because the function rejects all singletons and accepts an edge. At least one gate therefore reads the pendant. Interpret invalid reads as the false constant, discard ignored NOT arguments and simplify constants in evaluation order. Setting the pendant to false removes any gate reading it. AND becomes false, OR becomes an alias or false, and NOT becomes true. The restricted function is nonconstant, so propagating these constants requires no output constant gate. Thus clearing either pendant saves at least one gate, and the lower bound is \(12+1=13\).
 
@@ -17,6 +17,14 @@ If that reader is an AND, a NOT, or an OR with no other operand, it becomes cons
 The two readers cannot be the same OR. Otherwise the inputs with only one of the two pendants active would be indistinguishable when the core bits are fixed. With just vertex 5 active in the core, pendant 2 gives an edge and pendant 3 does not.
 
 Stripping the two ORs from a size-13 candidate leaves an 11-gate circuit for the six-vertex wheel. The reverse operation adds each OR to some of the later reads of its other operand. The reduction preserves the number of NOTs.
+
+## AND count with at most one NOT
+
+At least four AND gates are necessary, independently of the number of OR gates, for circuits with at most one NOT. For the finite check, first propagate constants. Store each input and each OR wire as a disjunction of the raw inputs and the preceding AND or NOT outputs. Inductively each operand of an AND or NOT has this form because OR just takes the union of its operands' supports. The output disjunction uses only AND or NOT outputs. A direct raw input in that disjunction would accept its singleton, which the edge function rejects.
+
+A circuit with at most three ANDs and one NOT would give an instance of a model with four slots, one for NOT and three for AND. Unused slots can be ignored by every later disjunction and the output. Each operand stores an eight-bit raw input mask and bits selecting earlier slots. The four possible positions of NOT are excluded on explicit subsets of the 256 inputs. The Lean file verifies the Boolean calculation with `bv_decide`, which uses a SAT solver and native certificate evaluation. [Finite check](LeafWheelAndCount.lean)
+
+Consequently, a 13-gate circuit using one NOT would have at most eight ORs. Its 11-gate wheel circuit after stripping the two leaf ORs would have at most six ORs.
 
 ## Upper bound
 
