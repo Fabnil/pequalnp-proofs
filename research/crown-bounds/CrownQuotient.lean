@@ -31,6 +31,76 @@ theorem pairedPromise_iff (f : (Fin 8 → Bool) → Bool) :
   · intro h u v
     exact (h u (column v)).trans (adj_column u v)
 
+/-- Every pair of flags is tested, and exchanging the two flags leaves the
+    input of the residual circuit unchanged. -/
+theorem pairedTests_symmetric {blocks : ℕ} (f : (Fin (4 * blocks) → Bool) → Bool)
+    (mate : Fin (4 * blocks) → Fin (4 * blocks))
+    (tests : ∀ u v, f (pairInput u v) = CrownBlocks.adj u (mate v))
+    (u v : Fin (4 * blocks)) : CrownBlocks.adj u (mate v) = CrownBlocks.adj v (mate u) := by
+  rw [← tests u v, ← tests v u]
+  congr 1
+  funext i
+  simp [pairInput, or_comm]
+
+private theorem commonNeighbor {blocks : ℕ} (u v : Fin (4 * blocks))
+    (same : u.val / 4 = v.val / 4) :
+    ∃ c, CrownBlocks.adj u c = true ∧ CrownBlocks.adj v c = true := by
+  have chooseLabel (i j : Fin 4) : ∃ l : Fin 4, l ≠ i ∧ l ≠ j := by
+    fin_cases i <;> fin_cases j <;> decide
+  obtain ⟨l, left, right⟩ :=
+    chooseLabel ⟨u.val % 4, by omega⟩ ⟨v.val % 4, by omega⟩
+  have ul : u.val % 4 ≠ l.val := by
+    intro eq
+    exact left (Fin.ext eq.symm)
+  have vl : v.val % 4 ≠ l.val := by
+    intro eq
+    exact right (Fin.ext eq.symm)
+  let c : Fin (4 * blocks) := ⟨4 * (u.val / 4) + l.val, by
+    have := u.isLt
+    have := l.isLt
+    omega⟩
+  have cb : c.val / 4 = u.val / 4 := by
+    have := l.isLt
+    dsimp [c]
+    omega
+  have cl : c.val % 4 = l.val := by
+    have := l.isLt
+    dsimp [c]
+    omega
+  exact ⟨c, by simp [CrownBlocks.adj, cb, cl, ul], by
+    simp [CrownBlocks.adj, cb, cl, same, vl]⟩
+
+/-- A complete row-column pairing makes adjacent and transposed tests
+    agree. Two rows in one block must then have their mates in one block. -/
+theorem pairedMates_sameBlock {blocks : ℕ}
+    (mate : Fin (4 * blocks) ≃ Fin (4 * blocks))
+    (symm : ∀ u v, CrownBlocks.adj u (mate v) = CrownBlocks.adj v (mate u))
+    (u v : Fin (4 * blocks)) (same : u.val / 4 = v.val / 4) :
+    (mate u).val / 4 = (mate v).val / 4 := by
+  obtain ⟨c, left, right⟩ := commonNeighbor u v same
+  let r := mate.symm c
+  have swapped (x : Fin (4 * blocks)) (edge : CrownBlocks.adj x c = true) :
+      r.val / 4 = (mate x).val / 4 := by
+    have result := (symm x r).symm
+    rw [show mate r = c by exact mate.apply_symm_apply c, edge] at result
+    exact (of_decide_eq_true result).1
+  exact (swapped u left).symm.trans (swapped v right)
+
+theorem pairedMates_blockInvolution {blocks : ℕ}
+    (mate : Fin (4 * blocks) ≃ Fin (4 * blocks))
+    (symm : ∀ u v, CrownBlocks.adj u (mate v) = CrownBlocks.adj v (mate u))
+    (u : Fin (4 * blocks)) :
+    (mate (mate u)).val / 4 = u.val / 4 := by
+  obtain ⟨c, edge, _⟩ := commonNeighbor u u rfl
+  let r := mate.symm c
+  have mate_r : mate r = c := mate.apply_symm_apply c
+  have other : CrownBlocks.adj r (mate u) = true := by
+    rw [← symm u r, mate_r, edge]
+  have same := (of_decide_eq_true other).1
+  have back := pairedMates_sameBlock mate symm r (mate u) same
+  rw [mate_r] at back
+  exact back.symm.trans (of_decide_eq_true edge).1.symm
+
 /-- A paired label has both a row port and a column port. An unpaired label
     keeps one port when the other is set to zero. -/
 def rowKept (missing rows : Finset (Fin 8)) (a : Fin 8) : Prop :=

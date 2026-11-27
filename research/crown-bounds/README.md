@@ -72,7 +72,9 @@ Lean checks circuits with 21 gates for two disjoint crowns and 43 gates for four
 
 When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
 
-**The general minimum for two crowns is 21.** The lower bound is (8k+5) for (k\ge2) disjoint crowns, including 37 for four crowns. The proof combines case analysis with finite CaDiCaL checks, and Lean checks the 21-gate witness. Lean also checks the normalization that moves an OR input vanishing on all negative samples to the final output without increasing the circuit size. [Exact minimum](crown-blocks.md#точный-минимум-двух-корон) · [Normalization](CrownSafeOr.lean#L129)
+**The general minimum for two crowns is 21.** The proof combines case analysis with finite CaDiCaL checks, and Lean checks the 21-gate witness. Lean also checks the normalization that moves an OR input vanishing on all negative samples to the final output without increasing the circuit size. [Exact minimum](crown-blocks.md#точный-минимум-двух-корон) · [Normalization](CrownSafeOr.lean#L129)
+
+For `k ≥ 2` disjoint crowns, the lower bound improves to `8k + 4 + floor(k/2)`. Two blocks can always be chosen so that zeroing them saves at least 17 gates. Four crowns now have size between 38 and 43. The restricted class with all inputs paired and a residual circuit built from ORs of products of OR factors has exact minimum 43. Lean checks the pairing constraint that gives the component types in this class. [Projection argument and restricted class](crown-four.md) · [Pairing lemmas](CrownQuotient.lean#L35)
 
 To reproduce the finite search from this directory, use Python and CaDiCaL 2.1.2. The four `UNKNOWN` cases at size 12 are handled by the formula enumeration and the single-side argument above.
 

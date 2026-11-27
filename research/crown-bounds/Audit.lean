@@ -33,6 +33,9 @@ import CrownQuotient
 #print axioms CrownBlocks.AfterThreePairs.noNine
 #print axioms CrownBlocks.RectangleWithSingletons.upperTen
 #print axioms CrownQuotient.pairedPromise_iff
+#print axioms CrownQuotient.pairedTests_symmetric
+#print axioms CrownQuotient.pairedMates_sameBlock
+#print axioms CrownQuotient.pairedMates_blockInvolution
 #print axioms CrownQuotient.visible_of_missing_le_two
 #print axioms CrownQuotient.quotient_on_visible
 #print axioms CrownQuotient.quotient_of_visible
