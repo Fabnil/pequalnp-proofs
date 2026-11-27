@@ -56,4 +56,4 @@ If $A=3$, every component has just one designation. Hence any erased position re
 
 If $A=4$, then $R=E=0$ and at most $J$ tracked positions remain. At most one pure component can have two designations and none can have three. If its two designations are both mixed attachments, they reach at most two fixed neighbors. Thus any shared erased position among the four neighbors is shared only by that same pair. Each first-difference possibility again serves at most one neighbor, except that several possibilities can serve the same fixed pair. That can add at most one neighbor to the total of $J+(M-J)=M$. The total is still at most three.
 
-This excludes an isolated line, and thus proves that $H$ spans. The remaining spanning branches and the existence of a circuit at size 58 remain open.
+This excludes an isolated line, and thus proves that $H$ spans. The [cover analysis](first-star-five-cover.md) restricts the branch with twelve centers to all line centers and a singleton point trigger. The existence of a circuit at size 58 remains open.
