@@ -14,6 +14,7 @@ import CrownLayered
 import CrownDemand
 import CrownMissingCell
 import CrownMixed
+import CyclePromise
 
 #print axioms CrownLower.crownSevenMinimum
 #print axioms CrownExact.crownSize27
@@ -63,3 +64,6 @@ import CrownMixed
 #print axioms CrownMixed.oneOfEachUpper19
 #print axioms CrownMixed.oneOfEachWithEdgeUpper21
 #print axioms CrownMixed.singleEdgeUpper0
+#print axioms CyclePromise.eightUpper11
+#print axioms CyclePromise.twoEightUpper19
+#print axioms CyclePromise.tenUpper12

@@ -74,6 +74,8 @@ These commands use the current constraints from the first pass. Counts left by e
 
 For a union of `p` isolated edges, `a` three-by-three crowns, and `b` four-by-four crowns, the exact size is `2p + ceil(15a/2) + 11b - 1 + (b mod 2)`. A single edge by itself takes zero gates. The parity term persists when both crown counts are odd. [Proof for mixed unions](crown-mixed.md) · [Lean witnesses](CrownMixed.lean#L60)
 
+For a union of bipartite cycles of lengths at least six with `N` vertices per side, the bound `2N - 1 + ceil(N/2)` is tight exactly when all lengths have even multiplicity, or there is one odd multiplicity at a length congruent to two modulo four. For odd numbers of copies of a common cycle with even half-length, two extra gates are necessary above that bound. The exact minimum for `k` copies of the eight-cycle is `10k - 1` for even `k` and `10k + 1` for odd `k`. [Cycle proofs](cycle-promise.md) · [Lean witnesses](CyclePromise.lean#L50)
+
 Pair a row input from one crown with a column input of the same label from the other. Eight ORs reduce a pair of crowns to one crown edge test on eight signals, with all singleton and same-side pair tests required to be negative. The residual circuit uses 13 gates and shares two pair ORs. [21/43-gate constructions in Lean](CrownBlocks.lean#L161) · [Promise equivalence](CrownQuotient.lean#L22)
 
 When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
