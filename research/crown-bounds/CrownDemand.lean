@@ -109,4 +109,55 @@ theorem pairs_force_subset (rules : List (AndRule A)) (third : Finset A)
   · exact contains
   · simpa using (Finset.mem_singleton.mp h ▸ inThird : a ∈ third)
 
+def AndRule.consume (rule : AndRule A) (active : Finset A) : Finset A :=
+  if rule.left ∈ active ∧ rule.right ∈ active then
+    ((active.erase rule.left).erase rule.right) ∪ rule.destinations
+  else
+    active
+
+def reduce (rules : List (AndRule A)) (active : Finset A) : Finset A :=
+  rules.foldl (fun active rule => rule.consume active) active
+
+private theorem consume_extra_positions (rule : AndRule A) (base active : Finset A)
+    (terminal : ¬(rule.left ∈ base ∧ rule.right ∈ base))
+    (single : rule.destinations.card ≤ 1) (extra : (active \ base).card ≤ 1) :
+    (rule.consume active \ base).card ≤ 1 := by
+  by_cases fires : rule.left ∈ active ∧ rule.right ∈ active
+  · have contained : (rule.consume active \ base) ⊆ rule.destinations := by
+      intro x hx
+      obtain ⟨live, outside⟩ := Finset.mem_sdiff.mp hx
+      have consumes : rule.consume active =
+          ((active.erase rule.left).erase rule.right) ∪ rule.destinations := by
+        simp [AndRule.consume, fires.1, fires.2]
+      rw [consumes] at live
+      rcases Finset.mem_union.mp live with erased | output
+      · obtain ⟨right, remaining⟩ := Finset.mem_erase.mp erased
+        obtain ⟨left, wasActive⟩ := Finset.mem_erase.mp remaining
+        have readOutside : x ∈ active \ base := Finset.mem_sdiff.mpr ⟨wasActive, outside⟩
+        by_cases leftInside : rule.left ∈ base
+        · have rightOutside : rule.right ∈ active \ base :=
+            Finset.mem_sdiff.mpr ⟨fires.2, fun hr => terminal ⟨leftInside, hr⟩⟩
+          exact (right (Finset.card_le_one.mp extra x readOutside _ rightOutside)).elim
+        · have leftOutside : rule.left ∈ active \ base :=
+            Finset.mem_sdiff.mpr ⟨fires.1, leftInside⟩
+          exact (left (Finset.card_le_one.mp extra x readOutside _ leftOutside)).elim
+      · exact output
+    exact (Finset.card_le_card contained).trans single
+  · simpa [AndRule.consume, fires] using extra
+
+/-- One extra position above a terminal base cannot branch when each
+    fired rule consumes its two positions and emits at most one. -/
+theorem reduce_extra_positions (rules : List (AndRule A)) (base active : Finset A)
+    (terminal : ∀ rule ∈ rules, ¬(rule.left ∈ base ∧ rule.right ∈ base))
+    (single : ∀ rule ∈ rules, rule.destinations.card ≤ 1)
+    (extra : (active \ base).card ≤ 1) :
+    (reduce rules active \ base).card ≤ 1 := by
+  induction rules generalizing active with
+  | nil => exact extra
+  | cons rule rest ih =>
+    have read := consume_extra_positions rule base active (terminal rule List.mem_cons_self)
+      (single rule List.mem_cons_self) extra
+    exact ih (rule.consume active) (fun r hr => terminal r (List.mem_cons_of_mem _ hr))
+      (fun r hr => single r (List.mem_cons_of_mem _ hr)) read
+
 end CrownDemand

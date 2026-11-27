@@ -204,6 +204,16 @@ theorem sixUpper65 : RepSizeAtMost (adj (blocks := 6)) 65 :=
   upperOfChecks (pairedWitness 3) (monotoneOfGateCheck (by decide)) (by decide)
     (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
 
+/-- Three paired circuits and one single-block circuit feed three output ORs. -/
+def sevenWitness : Circuit :=
+  ⟨pairGates 7 0 ++ pairGates 7 1 ++ pairGates 7 2 ++ blockGates 7 6 119 ++
+    [⟨.or, [76, 97]⟩, ⟨.or, [130, 118]⟩, ⟨.or, [131, 129]⟩], 132⟩
+
+set_option maxRecDepth 32768 in
+theorem sevenUpper77 : RepSizeAtMost (adj (blocks := 7)) 77 :=
+  upperOfChecks sevenWitness (monotoneOfGateCheck (by decide)) (by decide)
+    (by intro u; fin_cases u <;> decide +kernel) rowTargetBits
+
 /-- The ORs of inputs 3 and 7 meet indirectly through wires 12 and 13. -/
 def crownFourWithoutFourthPair : Circuit :=
   ⟨[⟨.or, [0, 4]⟩, ⟨.or, [1, 5]⟩, ⟨.or, [2, 6]⟩,
