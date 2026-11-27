@@ -162,6 +162,7 @@ def encode(
     operand_present: list[list[tuple[int, int]]] = [[], []]
     signal_present = [[cnf.disjunction(*(row[p] for p in positive[b])) for row in wires] for b in range(2)]
     maximal_pairing = size == 19 or expose_pairs
+    five_pair_projection = rich_projection and shape[:2] == (3, 2)
     if maximal_pairing:
         forked = [-one if i in singles else cnf.fresh() for i in range(num_vars + num_gates - 1)]
         exposed = [one if expose_pairs or i in singles else -one for i in range(num_vars)]
@@ -170,6 +171,11 @@ def encode(
             # to be reused. A sole first read can fold away in at most one.
             for seed in range(num_seeds):
                 cnf.clause(forked[seed])
+        if five_pair_projection:
+            source_repeats = 3 if shape[2] == 2 else 2
+            cnf.at_most([-forked[i] for i in range(num_seeds)], num_seeds - source_repeats)
+            aliases = [[[one if i == s else -one for i in range(num_vars)] for s in range(num_seeds)]
+                       for _ in range(2)]
     three_seed_bound = size == 19 and num_seeds == 3
     pure_positive = []
     if three_seed_bound or orientation_bound:
@@ -267,6 +273,15 @@ def encode(
             cnf.clause(-out[p], out[q], *allowed)
             retained = cnf.conjunction(a_top, c_top)
             top_retained[b].append(retained)
+            if five_pair_projection:
+                for seed_aliases in aliases[b]:
+                    from_left, from_right = (
+                        cnf.disjunction(*(cnf.conjunction(chosen, alias)
+                                          for chosen, alias in zip(operand, seed_aliases) if alias != -one))
+                        for operand in (left, right)
+                    )
+                    seed_aliases.append(cnf.disjunction(cnf.conjunction(is_or, -c_top, from_left),
+                                                       cnf.conjunction(is_or, -a_top, from_right)))
             allow_equal = cnf.fresh() if size - 8 > projection_floor else -one
             redundant[b].append(allow_equal)
             # After basic folding, every earlier signal is still available
@@ -316,6 +331,20 @@ def encode(
         if projection_floor == 12:
             for binary, trimmed in zip(top_retained[b], kept):
                 cnf.clause(-binary, trimmed)
+        if five_pair_projection:
+            # A port is reused after folding iff a wire that contracts to
+            # that port forks. The live output stays binary in both blocks.
+            reuse = [cnf.disjunction(*(cnf.conjunction(alias, split)
+                                       for alias, split in zip(seed_aliases, forked)
+                                       if alias != -one and split != -one))
+                     for seed_aliases in aliases[b]]
+            projected_repeats = 4 if shape[2] == 2 else 3
+            cnf.at_most([-repeated for repeated in reuse], num_seeds - projected_repeats)
+            if shape[2] == 1:
+                allowed = {(0, 1, 4), (0, 2, 4)}
+                for repeated in combinations(range(num_seeds), 3):
+                    if repeated not in allowed:
+                        cnf.clause(*(flag if i not in repeated else -flag for i, flag in enumerate(reuse)))
     return cnf, topology, groups
 
 

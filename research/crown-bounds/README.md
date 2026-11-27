@@ -119,7 +119,7 @@ Each selected case and the one-crown test must return `UNSAT`. The single-crown 
 
 ## Remaining configurations at size 20
 
-Use a representative that minimizes the number of gates active on a negative test, then maximizes direct cross-block ORs whose two original inputs are read once. All four-pair configurations are excluded. When the pairs have both orientations, the only remaining configurations have five pairs with orientation counts 3 and 2. Circuits with at most three pairs in one orientation also remain under consideration. [Proof and case counts](crown-quotient.md#зануление-целого-блока-при-объединениях-в-обоих-направлениях) · [Single orientation](crown-quotient.md#четыре-объединения-одного-направления)
+Use a representative that minimizes the number of gates active on a negative test, then maximizes direct cross-block ORs whose two original inputs are read once. Every configuration with pairs of both orientations is excluded, as is the four-pair case with all pairs in one orientation. A size-20 circuit consequently has at most three pairs in one orientation and must save nine gates on deleting at least one block. [Proof and case counts](crown-quotient.md#зануление-целого-блока-при-объединениях-в-обоих-направлениях) · [Single orientation](crown-quotient.md#четыре-объединения-одного-направления)
 
 The partially specified eight-wire problems below all need at least 12 gates. The formula checks cover size 10 and the four repeated-input case at size 11. The SAT check covers the remaining size-11 case with three repeated inputs. The omitted pairs are free in each test.
 
@@ -148,3 +148,25 @@ python3 crown_partial_sat.py 20 4 partial-runs --solver "$solver" --expose-pairs
 ```
 
 The full-size tests above return `UNSAT`. The cumulative lower bound for the two-crown instance remains 20. The new Lean lemma transfers visible pair tests and the singleton tests implied by negative pairs to a restricted quotient. [Lean coverage lemma](CrownQuotient.lean#L88)
+
+For `(3,2,2)`, both projection checks below return `UNSAT` on all their branches. Each projection must therefore reuse at least four combined signals. The full-size check uses this constraint and returns `UNSAT`.
+
+```sh
+for count in 2 3; do
+  python3 crown_quotient_sat.py 12 partial-runs --solver "$solver" --unchecked single-shifted \
+    --sole-or 3 6 7 --only-count "$count" --seconds 28 || exit
+done
+python3 crown_partial_sat.py 20 5 partial-runs --solver "$solver" --expose-pairs \
+  --shape 3 2 2 --seconds 110
+```
+
+For `(3,2,1)`, the projection check excludes every two-repeat pattern. For three repeats, the only pattern the check needs to retain has `L0`, `R3`, and one of `L1` or `L2` repeated. This constraint and the four- and five-repeat patterns together give `UNSAT` in the full circuit.
+
+```sh
+for count in 2 3; do
+  python3 crown_quotient_sat.py 12 partial-runs --solver "$solver" --unchecked single \
+    --sole-or 3 5 6 --only-count "$count" --seconds 28 || exit
+done
+python3 crown_partial_sat.py 20 5 partial-runs --solver "$solver" --expose-pairs \
+  --shape 3 2 1 --seconds 135
+```
