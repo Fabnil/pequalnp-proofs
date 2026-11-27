@@ -31,6 +31,7 @@ import CrownQuotient
 #print axioms CrownBlocks.AfterThreePairs.adj_restrict
 #print axioms CrownBlocks.AfterThreePairs.upperTen
 #print axioms CrownBlocks.AfterThreePairs.noNine
+#print axioms CrownBlocks.RectangleWithSingletons.upperTen
 #print axioms CrownQuotient.pairedPromise_iff
 #print axioms CrownQuotient.visible_of_missing_le_two
 #print axioms CrownQuotient.quotient_on_visible

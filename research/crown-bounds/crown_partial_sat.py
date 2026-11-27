@@ -26,9 +26,10 @@ def grouped_inputs(shape: tuple[int, int, int]) -> list[tuple[int, ...]]:
     return groups + [(x,) for x in range(INPUTS) if x not in used]
 
 
-def samples(groups: list[tuple[int, ...]]) -> tuple[dict[tuple[int, int], int], list[bool], list[tuple[int, ...]]]:
+def samples(groups: list[tuple[int, ...]], domain: Sequence[tuple[int, int]] = CELLS
+            ) -> tuple[dict[tuple[int, int], int], list[bool], list[tuple[int, ...]]]:
     wire = {x: i for i, group in enumerate(groups) for x in group}
-    cells = {cell: tuple(sorted({wire[x] for x in cell})) for cell in CELLS}
+    cells = {cell: tuple(sorted({wire[x] for x in cell})) for cell in domain}
     values: dict[tuple[int, ...], bool] = {}
     for cell, sample in cells.items():
         result = edge(cell)
@@ -348,7 +349,8 @@ def encode(
     return cnf, topology, groups
 
 
-def witness(output: str, topology: Topology, groups: list[tuple[int, ...]]):
+def witness(output: str, topology: Topology, groups: list[tuple[int, ...]],
+            domain: Sequence[tuple[int, int]] = CELLS):
     true = {int(x) for line in output.splitlines() if line.startswith("v ")
             for x in line[2:].split() if int(x) > 0}
     result = []
@@ -356,7 +358,7 @@ def witness(output: str, topology: Topology, groups: list[tuple[int, ...]]):
         a, = (i for i, flag in enumerate(left) if flag in true)
         b, = (i for i, flag in enumerate(right) if flag in true)
         result.append((op in true, a, b))
-    for cell in CELLS:
+    for cell in domain:
         values = [any(x in cell for x in group) for group in groups]
         for is_or, a, b in result:
             values.append((values[a] or values[b]) if is_or else (values[a] and values[b]))

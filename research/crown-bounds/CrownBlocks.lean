@@ -242,6 +242,28 @@ theorem noNine (overlap : Bool) : ¬ RepSizeAtMost (adj overlap) 9 := by
 
 end AfterThreePairs
 
+namespace RectangleWithSingletons
+
+def adj (u : Fin 3) (v : Fin 4) : Bool := decide (u.val ≠ v.val)
+
+def singleton (i : Fin 7) : List Bool := List.ofFn (fun j : Fin 7 => decide (i = j))
+
+def witness : Circuit :=
+  ⟨[⟨.or, [0, 3]⟩, ⟨.or, [1, 4]⟩, ⟨.or, [2, 5]⟩,
+    ⟨.or, [7, 8]⟩, ⟨.or, [9, 6]⟩, ⟨.and, [10, 11]⟩,
+    ⟨.and, [7, 8]⟩, ⟨.and, [9, 6]⟩, ⟨.or, [13, 14]⟩, ⟨.or, [12, 15]⟩], 16⟩
+
+set_option maxRecDepth 8192 in
+theorem upperTen : Monotone2 witness ∧ witness.size = 10 ∧ Represents adj witness ∧
+    ∀ i : Fin 7, witness.eval (singleton i) = false := by
+  refine ⟨monotoneOfGateCheck (by decide), by decide, ?_, ?_⟩
+  · intro u v
+    fin_cases u <;> fin_cases v <;> decide +kernel
+  · intro i
+    fin_cases i <;> decide +kernel
+
+end RectangleWithSingletons
+
 /-- Compile a monotone run while keeping the wires for earlier functions available. -/
 private theorem realizeRun {n s : ℕ} {A : BF n → Prop} {F : BF n}
     (trace : UC gF MonoA s A F) (earlier : List Gate)

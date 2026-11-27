@@ -70,9 +70,9 @@ These commands use the current constraints from the first pass. Counts left by e
 
 Lean checks circuits with 21 gates for two disjoint crowns and 43 gates for four. Pair a row input from one crown with a column input of the same label from the other. Eight ORs reduce a pair of crowns to one crown edge test on eight signals, with all singleton and same-side pair tests required to be negative. The residual circuit uses 13 gates and shares two pair ORs. [21/43-gate constructions](CrownBlocks.lean#L157) · [Promise equivalence](CrownQuotient.lean#L22)
 
-When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. The general budgets of 20 and 42 in the Desk remain open. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
+When every original input is read exactly once by one of the eight cross-block ORs, 21 gates are necessary. The lower bound for the residual circuit combines CaDiCaL, exact formula enumeration, and a case analysis for four repeated inputs on a single side. [Argument in Russian](crown-quotient.md) · [SAT encoding](crown_quotient_sat.py) · [Formula enumeration](crown_quotient_formulas.py)
 
-The general lower bounds for two and four crowns are 20 and 36. The proof of 20 combines case analysis with finite CaDiCaL checks. The 20-gate existence question remains open. Lean also checks a general normalization lemma that moves an OR input that vanishes on all negative samples to the final output without increasing the circuit size. [Lower-bound proof](crown-blocks.md#исключение-бюджета-19) · [Normalization](CrownSafeOr.lean#L129)
+**The general minimum for two crowns is 21.** The lower bound is (8k+5) for (k\ge2) disjoint crowns, including 37 for four crowns. The proof combines case analysis with finite CaDiCaL checks, and Lean checks the 21-gate witness. Lean also checks the normalization that moves an OR input vanishing on all negative samples to the final output without increasing the circuit size. [Exact minimum](crown-blocks.md#точный-минимум-двух-корон) · [Normalization](CrownSafeOr.lean#L129)
 
 To reproduce the finite search from this directory, use Python and CaDiCaL 2.1.2. The four `UNKNOWN` cases at size 12 are handled by the formula enumeration and the single-side argument above.
 
@@ -117,7 +117,7 @@ python3 crown_four_patterns.py partial-runs/crown4-once-first-or.cnf --solver "$
 
 Each selected case and the one-crown test must return `UNSAT`. The single-crown exclusion uses SHA-256 `380654d65bf4085f5b6ba4d97a4b5250c0354b41e4db949b92a8ae9f11350293` for its generated CNF and also passed a run with CaDiCaL's internal DRAT and LRAT checking enabled. The five-or-more-pair cases use the earlier quotient checks described above.
 
-## Remaining configurations at size 20
+## Reduction of the size-20 cases
 
 Use a representative that minimizes the number of gates active on a negative test, then maximizes direct cross-block ORs whose two original inputs are read once. Every configuration with pairs of both orientations is excluded, as is the four-pair case with all pairs in one orientation. A size-20 circuit consequently has at most three pairs in one orientation and must save nine gates on deleting at least one block. [Proof and case counts](crown-quotient.md#зануление-целого-блока-при-объединениях-в-обоих-направлениях) · [Single orientation](crown-quotient.md#четыре-объединения-одного-направления)
 
@@ -147,7 +147,7 @@ python3 crown_partial_sat.py 20 4 partial-runs --solver "$solver" --expose-pairs
   --shape 2 2 1 --shape 2 2 2 --shape 3 1 0 --shape 3 1 1 --seconds 75
 ```
 
-The full-size tests above return `UNSAT`. The cumulative lower bound for the two-crown instance remains 20. The new Lean lemma transfers visible pair tests and the singleton tests implied by negative pairs to a restricted quotient. [Lean coverage lemma](CrownQuotient.lean#L88)
+The full-size tests above return `UNSAT`. The Lean coverage lemma transfers visible pair tests and the singleton tests implied by negative pairs to a restricted quotient. [Lean coverage lemma](CrownQuotient.lean#L88)
 
 For `(3,2,2)`, both projection checks below return `UNSAT` on all their branches. Each projection must therefore reuse at least four combined signals. The full-size check uses this constraint and returns `UNSAT`.
 
@@ -170,3 +170,18 @@ done
 python3 crown_partial_sat.py 20 5 partial-runs --solver "$solver" --expose-pairs \
   --shape 3 2 1 --seconds 135
 ```
+
+## Exact minimum for two crowns
+
+With single-use original ports everywhere, the remaining case of a pure gate read twice is excluded by the first attachment to the mixed part of the circuit. An exceptional AND with one vanishing argument forces three direct pairs, all in one orientation. The three choices for the two block types in that case are excluded by `crown_exceptions_sat.py`. Thus any 20-gate circuit would have a repeated original port. [Case analysis](crown-blocks.md#исключение-однократных-исходных-чтений-при-бюджете-20)
+
+Setting a repeated port to zero saves two gates and leaves a disjoint (4\times4) crown and a (3\times4) crown. Cross-block negative tests imply that both restricted blocks must reject every singleton. The rectangular crown with this condition needs ten gates. At a total budget of 18, deleting a whole block is tight for either choice. The proof forces one to three direct pairs, all in one orientation, with the full column of the rectangular block among them. `crown_asymmetric_sat.py` excludes the three reduced instances. [Proof for the rectangular block and the distinct-sized pair](crown-blocks.md#полная-корона-и-прямоугольный-блок) · [Ten-gate rectangle witness in Lean](CrownBlocks.lean#L257)
+
+```sh
+python3 crown_exceptions_sat.py partial-runs --solver "$solver" --seconds 90
+python3 crown_rectangular_sat.py partial-runs --solver "$solver" --size 8 --seconds 30
+python3 crown_rectangular_sat.py partial-runs --solver "$solver" --size 9 --seconds 85
+python3 crown_asymmetric_sat.py partial-runs --solver "$solver" --seconds 115
+```
+
+These checks return `UNSAT`. The size-nine rectangle and all three asymmetric instances also passed with CaDiCaL's internal DRAT and LRAT checking enabled.
