@@ -8,13 +8,17 @@ $$
 
 This bound is attained exactly when all cycle lengths occur with even multiplicity, or exactly one length has odd multiplicity and its half-length is odd.
 
-For $k$ copies of a common cycle $C_{2n}$ with $n$ even and $k$ odd, there is a stronger bound. The exact size lies in
+For $k$ copies of a common cycle $C_{2n}$, the exact size is
 
 $$
-\left[\frac{5nk}{2}+1,\ \frac{5nk}{2}+2\right].
+s(C_{2n}^{\sqcup k})=
+\begin{cases}
+5nk/2+1 & \text{if } n \text{ is even and } k \text{ is odd},\\
+2nk-1+\lceil nk/2\rceil & \text{otherwise}.
+\end{cases}
 $$
 
-For $n=4$ the lower end is attained. Thus $k$ copies of $C_8$ need $10k-1$ gates for even $k$ and $10k+1$ for odd $k$. For odd $n$ the general bound gives the exact size for every $k$. These lower bounds allow arbitrary AND depth and sharing. [Lean witnesses for $C_8$, two copies of $C_8$, and $C_{10}$](CyclePromise.lean#L50)
+In particular, a single $C_{12}$ takes 16 gates and a single $C_{16}$ takes 21 gates. The lower bounds allow arbitrary AND depth and sharing. The constructions have at most one AND on each input-output path. [Lean witnesses](CyclePromise.lean#L50)
 
 ## Circuits
 
@@ -24,9 +28,47 @@ Write the adjacency of $C_{2n}$ as row $i$ adjacent to columns $i$ and $i+1$ mod
 
 **One copy of odd half-length.** Choose $d$ with $2d=1$ modulo $n$, and merge $r_i,c_{i+d}$ by OR. On the merged signals $x_i$ the edges are the pairs with indices differing by $d$ or $-d$. Since $d$ is invertible modulo $n$, this is the ordinary, undirected odd cycle on $n$ signals. A vertex cover of size $(n+1)/2$ can implement the edge test by stars centered at cover vertices. Assign each edge to exactly one chosen center. A star with $j$ assigned edges costs $j$ gates, including the binary OR of the leaves and the AND with its center. Joining the stars takes at most $(n-1)/2$ ORs. Together with the merging ORs this costs $2n+(n-1)/2$.
 
-**One copy of even half-length.** Label the $2n$ cycle vertices by $t$ modulo $2n$, with the two sides corresponding to parity. The reflection $t\mapsto 1-t$ exchanges the sides. OR together the two inputs of each orbit. Between distinct orbits the edges are a path on $n$ signals, with both permitted row-column orientations of each path edge. There are also two positive same-orbit tests, from the two edges fixed by the reflection. Test the path by stars with a vertex cover of size $n/2$, using $n-1+n/2-1$ gates. Test each fixed edge separately on its two raw inputs and join the three outputs. Including the $n$ merging ORs, this uses $5n/2+2$ gates. For $n=4$, directly OR each row's two neighboring columns, AND with the row, and OR the four terms, for 11 gates.
+**One copy of even half-length.** For $n=4$, directly OR each row's two neighboring columns, AND with the row, and OR the four terms, for 11 gates. For even $n\ge6$ the following construction uses $5n/2+1$ gates.
 
 All these circuits reject singleton inputs, both alone and as subcircuits of larger unions. Use pairs of copies of each length, and one remaining odd-half-length copy when allowed by the stated equality condition. Joining the outputs proves attainability in those cases. For even $n$ and odd $k$, use $(k-1)/2$ pairs and one single-copy construction.
+
+### A single cycle of length divisible by four
+
+Let $n=2r$ with $r\ge3$, and write the raw row and column inputs as $R_i,C_i$ for $0\le i<2r$. First build $r$ shared ORs
+
+$$
+P=R_r\lor C_0,\qquad Q=R_{2r-1}\lor C_r,\qquad
+T_i=R_{r+i}\lor C_i\quad(1\le i\le r-2).
+$$
+
+For $0\le j<r$ define the two factors
+
+$$
+U_j=
+\begin{cases}
+R_j\lor C_{r+1+j} & 0\le j<r-2,\\
+R_j\lor C_{2r-1} & r-2\le j<r,
+\end{cases}
+\qquad
+V_j=
+\begin{cases}
+P\lor T_1 & j=0,\\
+T_j\lor T_{j+1} & 1\le j<r-2,\\
+T_{r-2}\lor C_{r-1} & j=r-2,\\
+Q\lor C_{r-1} & j=r-1.
+\end{cases}
+$$
+
+Take the output to be $(P\land Q)\lor\bigvee_{j=0}^{r-1}(U_j\land V_j)$. Each product has disjoint raw inputs in its two factors. Thus on a promised test it accepts exactly when the row and column occur in opposite factors. The possible products and accepted columns for each row are
+
+| Active row | Products containing the row | Accepted columns |
+| --- | --- | --- |
+| $R_j$ for $0\le j<r$ | $U_j\land V_j$ | $C_j,C_{j+1}$ |
+| $R_r$ | $P\land Q,\ U_0\land V_0$ | $C_r,C_{r+1}$ |
+| $R_{r+i}$ for $1\le i\le r-2$ | $U_{i-1}\land V_{i-1},\ U_i\land V_i$ | $C_{r+i},C_{r+i+1}$ |
+| $R_{2r-1}$ | $P\land Q,\ U_{r-1}\land V_{r-1}$ | $C_{2r-1},C_0$ |
+
+This is the required cycle. The shared ORs cost $r$ gates, the factors cost $2r$, the products cost $r+1$, and the final OR costs $r$. Hence the total is $5r+1=5n/2+1$. The [Lean generator](CyclePromise.lean#L60) implements these formulas, checks its gate count for all $r\ge3$, and verifies the full promised tables at $r=3,4$.
 
 ## Counting union outputs
 
@@ -90,4 +132,4 @@ The $2t-1$ full blocks are split $t$ to $t-1$ between orientations. In either de
 
 Finally suppose both deficient blocks have two boundary edges. Remove the shared profiles of all their endpoints. The remaining graph on positions has paths from singleton runs and exactly the cycles from full blocks. Its equality on the two sides requires equal counts of full cycles of each length, contrary to the split $t$ to $t-1$.
 
-This rules out $h=nk/2+1$ and proves the lower end of the stated interval. The 11-gate circuit for one $C_8$ and 19-gate circuits for pairs attain that lower end for $n=4$.
+This rules out $h=nk/2+1$ and gives $s\ge5nk/2+1$. The single-copy circuits of size $5n/2+1$ and the $(5n-1)$-gate pair circuits attain it.

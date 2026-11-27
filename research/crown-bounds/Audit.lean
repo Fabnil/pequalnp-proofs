@@ -67,3 +67,6 @@ import CyclePromise
 #print axioms CyclePromise.eightUpper11
 #print axioms CyclePromise.twoEightUpper19
 #print axioms CyclePromise.tenUpper12
+#print axioms CyclePromise.evenWitnessSize
+#print axioms CyclePromise.twelveUpper16
+#print axioms CyclePromise.sixteenUpper21
