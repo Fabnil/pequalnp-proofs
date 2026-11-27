@@ -52,4 +52,4 @@ Consider the destinations of the two nonadmissible gates on the singleton runs. 
 
 Each case falls short of five missing edges. This finishes the saturated twelve-center exclusion.
 
-The [matching threshold](first-star-five.md#the-matching-threshold) gives at least twelve centers. With $w$ raw-reachable positions outside the stars, $w\ge4$ would force exactly twelve centers and equality in the budget $s\ge \sigma+c-1+w$ at $\sigma\ge43$. Hence $w\le3$, so only one nonadmissible gate can have two raw-reachable operands. The other branches of the five-edge case remain open.
+The [matching threshold](first-star-five.md#the-matching-threshold) gives at least twelve centers. With $w$ raw-reachable positions outside the stars, $w\ge4$ would force exactly twelve centers and equality in the budget $s\ge \sigma+c-1+w$ at $\sigma\ge43$. Hence $w\le3$, so only one nonadmissible gate can have two raw-reachable operands. The [follow-up](first-star-five-spanning.md) excludes isolated vertices and extends this conclusion to the entire five-edge case. The remaining spanning branches are open.
