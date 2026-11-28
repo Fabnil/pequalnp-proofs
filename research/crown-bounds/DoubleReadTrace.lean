@@ -30,6 +30,9 @@ def PairOnly (C : Circuit) (r s : Fin n) (w : ℕ) : Prop :=
   value C (pair r s) w = true ∧ value C (single r) w = false ∧
     value C (single s) w = false
 
+def PairAnd (C : Circuit) (r s : Fin n) (j : ℕ) : Prop :=
+  ∃ g, C.gates[j]? = some g ∧ g.op = .and ∧ PairOnly C r s (n + j)
+
 inductive ActivePath (C : Circuit) (x : Fin n → Bool) : ℕ → ℕ → Prop where
   | here (w) : ActivePath C x w w
   | step {first w j g} : ActivePath C x first w → C.gates[j]? = some g →
@@ -402,9 +405,37 @@ private theorem ActivePath.afterLastAnd {C : Circuit} {r s : Fin n} {u v : ℕ}
     · exact (only _ hl ⟨_, hg, hand, hval⟩).elim
     · exact ih.appendReader hg hor hw
 
+private theorem ActivePath.endsTrue {C : Circuit} {x : Fin n → Bool} {u v : ℕ}
+    (p : ActivePath C x u v) (start : value C x u = true) : value C x v = true := by
+  cases p with
+  | here => exact start
+  | step _ _ _ hval => exact hval
+
+private theorem ActivePath.afterLastPairAnd {C : Circuit} {r s : Fin n} {u v : ℕ}
+    (p : ActivePath C (pair r s) u v) (shape : BinaryBack n C)
+    (start : value C (pair r s) u = true)
+    (only : ∀ j, u < n + j → ¬ PairAnd C r s j) (finish : PairOnly C r s v) :
+    OrPath C n u v := by
+  induction p with
+  | here => exact .here _
+  | @step w j g hp hg hw _ ih =>
+    have hl := lt_of_le_of_lt (hp.order shape) (readsEarlier shape hg hw)
+    obtain ⟨hop, a, b, hab, _, ha, hb⟩ := shape _ _ hg
+    rcases hop with hand | hor
+    · exact (only _ hl ⟨_, hg, hand, finish⟩).elim
+    · have hr := Bool.or_eq_false_iff.mp ((orValue (single r) hg hab ha hb hor).symm.trans finish.2.1)
+      have hs := Bool.or_eq_false_iff.mp ((orValue (single s) hg hab ha hb hor).symm.trans finish.2.2)
+      have prev : PairOnly C r s w := by
+        have live := hp.endsTrue start
+        simp [hab] at hw
+        rcases hw with rfl | rfl
+        · exact ⟨live, hr.1, hs.1⟩
+        · exact ⟨live, hr.2, hs.2⟩
+      exact (ih prev).appendReader hg hor hw
+
 private theorem sharedBefore {C : Circuit} {r s : Fin n} {root join : ℕ}
     (shape : BinaryBack n C)
-    (only : ∀ j, ActiveAnd C r s j → j ≠ join → j = root)
+    (only : ∀ j, PairAnd C r s j → j ≠ join → j = root)
     (u : ℕ) (hu : u < n + join) (hp : PairOnly C r s u) :
     OrPath C n (n + root) u := by
   induction u using Nat.strong_induction_on with
@@ -415,7 +446,7 @@ private theorem sharedBefore {C : Circuit} {r s : Fin n} {root join : ℕ}
     obtain ⟨j, g, a, b, rfl, hg, hop, hab, _, ha, hb⟩ :=
       gateFor shape hge (validOfTrue hp.1)
     rcases hop with hop | hop
-    · have hj := only j ⟨g, hg, hop, hp.1⟩ (by omega)
+    · have hj := only j ⟨g, hg, hop, hp⟩ (by omega)
       rw [hj]
       exact .here _
     · have hr := Bool.or_eq_false_iff.mp ((orValue (single r) hg hab ha hb hop).symm.trans hp.2.1)
@@ -471,8 +502,11 @@ theorem three_active_ands_or_shared_source {C : Circuit} {r s : Fin n} {d e : �
   subst d
   have ha : PairOnly C r s a := ⟨hain, huoff, haoff⟩
   have hb : PairOnly C r s b := ⟨hbin, hvoff, hboff⟩
-  have pa := sharedBefore shape only a hc ha
-  have pb := sharedBefore shape only b hh hb
+  have onlyPair (k : ℕ) (h : PairAnd C r s k) (hn : k ≠ j) : k = i := by
+    obtain ⟨g, hg, hop, hp⟩ := h
+    exact only k ⟨g, hg, hop, hp.1⟩ hn
+  have pa := sharedBefore shape onlyPair a hc ha
+  have pb := sharedBefore shape onlyPair b hh hb
   have earlier := lt_of_le_of_lt (pa.order shape) hc
   have hout : OrPath C n (n + j) C.output := hjpath.afterLastAnd shape (by
     intro k hka hak
@@ -687,6 +721,53 @@ theorem three_active_ands_of_minimal {C : Circuit} {r s : Fin n} {d e : ℕ → 
   · obtain ⟨D, hD, hsz, hval⟩ := shrinkShared shape hg hop hab pa pb hout
     exact (not_lt_of_ge (minimal D hD hval) hsz).elim
 
+/-- A merge that repeats both endpoints requires three pair-only ANDs in a least circuit,
+even if an arbitrary number of other ANDs turn on at one of the endpoint singletons. -/
+theorem three_pair_ands_of_common_merge {C : Circuit} {r s : Fin n} {j : ℕ}
+    (shape : BinaryBack n C) (mr : Merge C r s j) (ms : Merge C s r j)
+    (path : ActivePath C (pair r s) (n + j) C.output)
+    (hout : PairOnly C r s C.output)
+    (minimal : ∀ D : Circuit, Monotone2 D →
+      (∀ x : Fin n → Bool, D.eval (List.ofFn x) = C.eval (List.ofFn x)) → C.size ≤ D.size) :
+    ∃ i j k, i ≠ j ∧ i ≠ k ∧ j ≠ k ∧
+      PairAnd C r s i ∧ PairAnd C r s j ∧ PairAnd C r s k := by
+  classical
+  by_contra noThree
+  obtain ⟨i, hi⟩ := cross_of_pairOnly shape hout
+  have ine := cross_ne_merge hi mr
+  have hpi : PairAnd C r s i := by
+    obtain ⟨g, _, _, hg, hop, _, hp, _⟩ := hi
+    exact ⟨g, hg, hop, hp⟩
+  obtain ⟨g, a, b, hg, hop, hab, haon, hbon, has, hbs⟩ := mr
+  obtain ⟨h, a', b', hh, _, hab', _, _, har', hbr'⟩ := ms
+  have he := Option.some.inj (hg.symm.trans hh)
+  subst h
+  obtain ⟨ea, eb⟩ := List.cons.inj (hab.symm.trans hab')
+  have eb' := (List.cons.inj eb).1
+  subst a'
+  subst b'
+  have ha : PairOnly C r s a := ⟨haon, har', has⟩
+  have hb : PairOnly C r s b := ⟨hbon, hbr', hbs⟩
+  have hla := readsEarlier shape hg (show a ∈ g.inputs by simp [hab])
+  have hlb := readsEarlier shape hg (show b ∈ g.inputs by simp [hab])
+  have hpj : PairOnly C r s (n + j) := by
+    refine ⟨?_, ?_, ?_⟩
+    · simp [andValue (pair r s) hg hab hla hlb hop, haon, hbon]
+    · simp [andValue (single r) hg hab hla hlb hop, har']
+    · simp [andValue (single s) hg hab hla hlb hop, has]
+  have only (k : ℕ) (h : PairAnd C r s k) (hn : k ≠ j) : k = i := by
+    by_contra! ne
+    exact noThree ⟨i, j, k, ine, ne.symm, hn.symm, hpi, ⟨g, hg, hop, hpj⟩, h⟩
+  have pa := sharedBefore shape only a hla ha
+  have pb := sharedBefore shape only b hlb hb
+  have root_lt := lt_of_le_of_lt (pa.order shape) hla
+  have last : OrPath C n (n + j) C.output := path.afterLastPairAnd shape hpj.1 (by
+    intro k hk h
+    have e := only k h (by omega)
+    omega) hout
+  obtain ⟨D, hm, hsz, hval⟩ := shrinkShared shape hg hop hab pa pb last
+  exact (not_lt_of_ge (minimal D hm hval) hsz)
+
 theorem fano_double_read_active_ands (C : Circuit) (hsize : C.size ≤ 27)
     (shape : BinaryBack 14 C)
     (compute : ∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = true ↔
@@ -720,3 +801,4 @@ end PEqualNP.Outside.DoubleReadTrace
 #print axioms PEqualNP.Outside.DoubleReadTrace.overlap_of_certificate
 #print axioms PEqualNP.Outside.DoubleReadTrace.three_active_ands_or_shared_source
 #print axioms PEqualNP.Outside.DoubleReadTrace.fano_double_read_active_ands
+#print axioms PEqualNP.Outside.DoubleReadTrace.three_pair_ands_of_common_merge
