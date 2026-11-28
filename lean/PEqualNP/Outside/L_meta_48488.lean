@@ -2302,6 +2302,475 @@ theorem treeBlockF_eq (lo hi : Nat) (f : Nat → Bool) : treeBlockF lo hi f = tr
         cases (Nat.rec (motive := fun _ => Nat → Nat → Bool) (fun _ _ => true) _ s) a ((a + b) / 2) <;> rfl
       · rfl
 
+theorem dagPart_false_of_agreement {ws : List Nat} {pos neg p n : Nat}
+    (hp : pos.testBit p = true) (hn : neg.testBit n = true)
+    (ag : ∀ w ∈ ws, w.testBit p = w.testBit n) : dagPart ws pos neg = false := by
+  have nonzero {v i : Nat} (h : v.testBit i = true) : v ≠ 0 := by
+    rintro rfl
+    simp at h
+  induction ws generalizing pos neg with
+  | nil => simp [dagPart, beq_false_ne (nonzero hp), beq_false_ne (nonzero hn)]
+  | cons w ws ih =>
+    change ((Nat.beq pos 0 || Nat.beq neg 0) ||
+      forceW (pos &&& w) (fun up => forceW (neg &&& w) (fun down =>
+        dagPart ws up down && forceW (pos ^^^ up) (fun offP =>
+          forceW (neg ^^^ down) (dagPart ws offP))))) = false
+    simp only [forceW_eq, beq_false_ne (nonzero hp), beq_false_ne (nonzero hn), Bool.false_or,
+      Bool.and_eq_false_iff]
+    have tail : ∀ v ∈ ws, v.testBit p = v.testBit n := fun v hv => ag v (List.mem_cons_of_mem _ hv)
+    have wh := ag w List.mem_cons_self
+    cases h : w.testBit p
+    · right
+      have h' : w.testBit n = false := wh.symm.trans h
+      exact ih (by simp [Nat.testBit_and, Nat.testBit_xor, hp, h])
+        (by simp [Nat.testBit_and, Nat.testBit_xor, hn, h']) tail
+    · left
+      have h' : w.testBit n = true := wh.symm.trans h
+      exact ih (by simp [Nat.testBit_and, hp, h]) (by simp [Nat.testBit_and, hn, h']) tail
+
+
+def wireSig : List Nat → Nat → Nat
+  | [], _ => 0
+  | w :: ws, row => (w.testBit row).toNat ||| (wireSig ws row <<< 1)
+
+theorem wireSig_testBit (ws : List Nat) (row i : Nat) :
+    (wireSig ws row).testBit i = (ws.getD i 0).testBit row := by
+  induction ws generalizing i with
+  | nil => simp [wireSig]
+  | cons w ws ih =>
+    cases i with
+    | zero =>
+      simp only [wireSig, Nat.testBit_or, Nat.testBit_bool_toNat, Nat.testBit_shiftLeft]
+      simp
+    | succ i =>
+      simpa [wireSig, Nat.testBit_bool_toNat, List.getD_cons_succ] using ih i
+
+/-- Bit `s` records whether any of the included rows has wire signature `s`. -/
+def sigOccupied (ws : List Nat) (rows : Nat) : Nat → Nat :=
+  Nat.rec 0 (fun row smaller =>
+    Bool.rec smaller ((1 <<< wireSig ws row) ||| smaller) (rows.testBit row))
+
+theorem sigOccupied_testBit (ws : List Nat) (rows width s : Nat) :
+    (sigOccupied ws rows width).testBit s = true ↔
+      ∃ r, r < width ∧ rows.testBit r = true ∧ wireSig ws r = s := by
+  induction width with
+  | zero => simp [sigOccupied]
+  | succ width ih =>
+    have bound (r : Nat) : r < width + 1 ↔ r = width ∨ r < width := by omega
+    change (Bool.rec (motive := fun _ => Nat) (sigOccupied ws rows width)
+      ((1 <<< wireSig ws width) ||| sigOccupied ws rows width)
+      (rows.testBit width)).testBit s = true ↔ _
+    cases bit : rows.testBit width <;>
+      simp only [Nat.shiftLeft_eq, Nat.one_mul, Nat.testBit_or, Nat.testBit_two_pow,
+        Bool.or_eq_true, decide_eq_true_eq, ih]
+    · constructor
+      · rintro ⟨r, hr, hit, eq⟩
+        exact ⟨r, by omega, hit, eq⟩
+      · rintro ⟨r, hr, hit, eq⟩
+        rcases (bound r).mp hr with rfl | lt
+        · exact Bool.noConfusion (bit.symm.trans hit)
+        · exact ⟨r, lt, hit, eq⟩
+    · constructor
+      · rintro (eq | ⟨r, hr, hit, eq⟩)
+        · exact ⟨width, Nat.lt_succ_self _, bit, eq⟩
+        · exact ⟨r, by omega, hit, eq⟩
+      · rintro ⟨r, hr, hit, eq⟩
+        rcases (bound r).mp hr with rfl | lt
+        · exact Or.inl eq
+        · exact Or.inr ⟨r, lt, hit, eq⟩
+
+
+def sigCross (p n offset : Nat) : Nat :=
+  (p &&& (n >>> offset)) ||| (n &&& (p >>> offset))
+
+theorem sigCross_rows {ws : List Nat} {pos neg width offset v : Nat}
+    (hit : (sigCross (sigOccupied ws pos width) (sigOccupied ws neg width) offset).testBit v = true) :
+    ∃ l r, wireSig ws l = v ∧ wireSig ws r = v + offset ∧
+      ((pos.testBit l = true ∧ neg.testBit r = true) ∨
+       (neg.testBit l = true ∧ pos.testBit r = true)) := by
+  simp only [sigCross, Nat.testBit_or, Nat.testBit_and, Nat.testBit_shiftRight, Bool.or_eq_true,
+    Bool.and_eq_true, sigOccupied_testBit] at hit
+  rcases hit with ⟨⟨l, _, hl, eqL⟩, ⟨r, _, hr, eqR⟩⟩ | ⟨⟨l, _, hl, eqL⟩, ⟨r, _, hr, eqR⟩⟩
+  · exact ⟨l, r, eqL, eqR.trans (Nat.add_comm _ _), Or.inl ⟨hl, hr⟩⟩
+  · exact ⟨l, r, eqL, eqR.trans (Nat.add_comm _ _), Or.inr ⟨hl, hr⟩⟩
+
+def sigUnit (i : Nat) (bit : Bool) : Nat := Bool.rec 0 (1 <<< i) bit
+
+private theorem sigUnit_testBit (i j : Nat) (b : Bool) :
+    (sigUnit i b).testBit j = (decide (i = j) && b) := by
+  cases b <;> simp [sigUnit, Nat.shiftLeft_eq, Nat.testBit_two_pow]
+
+def sigPatternVal (a b pat : Nat) : Nat :=
+  sigUnit a (pat.testBit 0) ||| sigUnit b (pat.testBit 1)
+
+private theorem sigPatternVal_testBit (a b pat i : Nat) : (sigPatternVal a b pat).testBit i =
+    ((decide (a = i) && pat.testBit 0) || (decide (b = i) && pat.testBit 1)) := by
+  simp only [sigPatternVal, Nat.testBit_or, sigUnit_testBit]
+
+def SigPattern (a b pat v : Nat) : Prop :=
+  v.testBit a = pat.testBit 0 ∧ v.testBit b = pat.testBit 1
+
+private theorem sigOr_eq_add {x y : Nat} (disjoint : x &&& y = 0) : x ||| y = x + y := by
+  induction y using Nat.div2Induction generalizing x with
+  | ind y ih =>
+    rcases Nat.eq_zero_or_pos y with rfl | pos
+    · simp
+    have modZero : (x % 2) &&& (y % 2) = 0 := by
+      have h := Nat.and_mod_two_pow (a := x) (b := y) (n := 1)
+      rw [disjoint] at h
+      exact h.symm
+    have divZero : (x / 2) &&& (y / 2) = 0 := by rw [← Nat.and_div_two, disjoint]
+    have high := ih pos (x := x / 2) divZero
+    have low : (x % 2) ||| (y % 2) = x % 2 + y % 2 := by
+      rcases Nat.mod_two_eq_zero_or_one x with hx | hx <;>
+      rcases Nat.mod_two_eq_zero_or_one y with hy | hy <;>
+      simp [hx, hy] at modZero ⊢
+    rw [← Nat.mod_add_div (x ||| y) 2, Nat.or_mod_two, Nat.or_div_two, high, low]
+    have hx := Nat.mod_add_div x 2
+    have hy := Nat.mod_add_div y 2
+    omega
+
+/-- Adding the difference between two valid patterns changes only those two wire bits. -/
+theorem sigPattern_shift {a b lo hi v : Nat} (ab : a ≠ b)
+    (hp : SigPattern a b lo v) (increasing : sigPatternVal a b lo ≤ sigPatternVal a b hi) :
+    let next := v + (sigPatternVal a b hi - sigPatternVal a b lo)
+    SigPattern a b hi next ∧ ∀ i, i ≠ a → i ≠ b → v.testBit i = next.testBit i := by
+  let clear := v ^^^ sigPatternVal a b lo
+  have bits (i : Nat) : clear.testBit i = if i = a ∨ i = b then false else v.testBit i := by
+    by_cases ha : i = a
+    · subst i
+      simp [clear, Nat.testBit_xor, sigPatternVal_testBit, ab.symm, hp.1]
+    · by_cases hb : i = b
+      · subst i
+        simp [clear, Nat.testBit_xor, sigPatternVal_testBit, ab, hp.2]
+      · simp [clear, Nat.testBit_xor, sigPatternVal_testBit, ha, hb, Ne.symm ha, Ne.symm hb]
+  have old : clear ||| sigPatternVal a b lo = v := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    rw [Nat.testBit_or, bits, sigPatternVal_testBit]
+    by_cases ha : i = a
+    · subst i; simp [ab.symm, hp.1]
+    · by_cases hb : i = b
+      · subst i; simp [ab, hp.2]
+      · simp [ha, hb, Ne.symm ha, Ne.symm hb]
+  have disj (pat : Nat) : clear &&& sigPatternVal a b pat = 0 := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    rw [Nat.testBit_and, bits, sigPatternVal_testBit]
+    by_cases included : i = a ∨ i = b
+    · simp [included]
+    · obtain ⟨ha, hb⟩ := not_or.mp included
+      simp [included, Ne.symm ha, Ne.symm hb]
+  have sum : v + (sigPatternVal a b hi - sigPatternVal a b lo) = clear ||| sigPatternVal a b hi := by
+    have orig := (sigOr_eq_add (disj lo)).symm.trans old
+    rw [sigOr_eq_add (disj hi)]
+    omega
+  change SigPattern a b hi (v + (sigPatternVal a b hi - sigPatternVal a b lo)) ∧ _
+  rw [sum]
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · simp [Nat.testBit_or, bits, sigPatternVal_testBit, ab.symm]
+  · simp [Nat.testBit_or, bits, sigPatternVal_testBit, ab]
+  · intro i ha hb
+    simp [Nat.testBit_or, bits, sigPatternVal_testBit, ha, hb, Ne.symm ha, Ne.symm hb]
+
+theorem sigCross_pattern_sound {ws : List Nat} {pos neg width a b lo hi guard : Nat}
+    (ab : a ≠ b) (increasing : sigPatternVal a b lo ≤ sigPatternVal a b hi)
+    (guard_ok : ∀ i, guard.testBit i = true → SigPattern a b lo i)
+    (hit : (sigCross (sigOccupied ws pos width) (sigOccupied ws neg width)
+      (sigPatternVal a b hi - sigPatternVal a b lo) &&& guard) ≠ 0) :
+    ∃ l r, ((pos.testBit l = true ∧ neg.testBit r = true) ∨
+            (neg.testBit l = true ∧ pos.testBit r = true)) ∧
+      SigPattern a b lo (wireSig ws l) ∧ SigPattern a b hi (wireSig ws r) ∧
+      ∀ i, i ≠ a → i ≠ b → (ws.getD i 0).testBit l = (ws.getD i 0).testBit r := by
+  have bit := Nat.testBit_log2 hit
+  rw [Nat.testBit_and, Bool.and_eq_true] at bit
+  obtain ⟨l, r, eqL, eqR, side⟩ := sigCross_rows bit.1
+  have hp := guard_ok _ bit.2
+  obtain ⟨hq, same⟩ := sigPattern_shift ab hp increasing
+  refine ⟨l, r, side, eqL ▸ hp, eqR ▸ hq, ?_⟩
+  intro i ha hb
+  rw [← wireSig_testBit ws l, ← wireSig_testBit ws r, eqL, eqR]
+  exact same i ha hb
+
+
+/-- Low runs of length `2^i`, duplicated at successively larger steps. -/
+def sigZeroStripe (i : Nat) : Nat → Nat :=
+  Nat.rec ((1 <<< (1 <<< i)) - 1) (fun k prev =>
+    prev ||| (prev <<< (1 <<< (i + 1 + k))))
+
+theorem sigZeroStripe_sound {i steps v : Nat} (hit : (sigZeroStripe i steps).testBit v = true) :
+    v.testBit i = false := by
+  induction steps generalizing v with
+  | zero =>
+    change ((1 <<< (1 <<< i)) - 1).testBit v = true at hit
+    simp only [Nat.shiftLeft_eq, Nat.one_mul, Nat.testBit_two_pow_sub_one,
+      decide_eq_true_eq] at hit
+    exact Nat.testBit_lt_two_pow hit
+  | succ k ih =>
+    change (sigZeroStripe i k ||| (sigZeroStripe i k <<< (1 <<< (i + 1 + k)))).testBit v = true at hit
+    rw [Nat.testBit_or, Nat.testBit_shiftLeft] at hit
+    simp only [Nat.shiftLeft_eq, Nat.one_mul, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at hit
+    rcases hit with low | ⟨ge, high⟩
+    · exact ih low
+    · calc
+        v.testBit i = (2^(i + 1 + k) + (v - 2^(i + 1 + k))).testBit i := by
+          congr 1
+          omega
+        _ = (v - 2^(i + 1 + k)).testBit i := Nat.testBit_two_pow_add_gt (by omega) _
+        _ = false := ih high
+
+def sigBitGuard (width i : Nat) (on : Bool) : Nat :=
+  let zeros := sigZeroStripe i (width - (i + 1))
+  Bool.rec zeros (zeros <<< (1 <<< i)) on
+
+theorem sigBitGuard_sound {width i v : Nat} {on : Bool}
+    (hit : (sigBitGuard width i on).testBit v = true) : v.testBit i = on := by
+  cases on
+  · exact sigZeroStripe_sound hit
+  · change ((sigZeroStripe i (width - (i + 1))) <<< (1 <<< i)).testBit v = true at hit
+    rw [Nat.testBit_shiftLeft] at hit
+    simp only [Nat.shiftLeft_eq, Nat.one_mul, Bool.and_eq_true, decide_eq_true_eq] at hit
+    calc
+      v.testBit i = (2^i + (v - 2^i)).testBit i := by
+        congr 1
+        have ge := hit.1
+        omega
+      _ = !(v - 2^i).testBit i := Nat.testBit_two_pow_add_eq _ _
+      _ = true := by simp [sigZeroStripe_sound hit.2]
+
+def sigPatternGuard (width a b pat : Nat) : Nat :=
+  sigBitGuard width a (pat.testBit 0) &&& sigBitGuard width b (pat.testBit 1)
+
+theorem sigPatternGuard_sound {width a b pat v : Nat}
+    (hit : (sigPatternGuard width a b pat).testBit v = true) : SigPattern a b pat v := by
+  simp only [sigPatternGuard, Nat.testBit_and, Bool.and_eq_true] at hit
+  exact ⟨sigBitGuard_sound hit.1, sigBitGuard_sound hit.2⟩
+
+
+def sigPairLo (i : Nat) : Nat := ([0, 0, 0, 1, 1, 2] : List Nat).getD i 0
+def sigPairHi (i : Nat) : Nat := ([1, 2, 3, 2, 3, 3] : List Nat).getD i 0
+
+private theorem sigPatternVal0 (a b : Nat) : sigPatternVal a b 0 = 0 := by
+  simp [sigPatternVal, sigUnit]
+private theorem sigPatternVal1 (a b : Nat) : sigPatternVal a b 1 = 1 <<< a := by
+  change (1 <<< a) ||| 0 = _
+  simp
+private theorem sigPatternVal2 (a b : Nat) : sigPatternVal a b 2 = 1 <<< b := by
+  change 0 ||| (1 <<< b) = _
+  simp
+private theorem sigPatternVal3 {a b : Nat} (ab : a ≠ b) :
+    sigPatternVal a b 3 = (1 <<< a) + (1 <<< b) := by
+  change (1 <<< a) ||| (1 <<< b) = _
+  apply sigOr_eq_add
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [Nat.testBit_and]
+  simp only [Nat.shiftLeft_eq, Nat.one_mul, Nat.testBit_two_pow, Nat.zero_testBit]
+  by_cases h : a = i
+  · subst i
+    simp [ab.symm]
+  · simp [h]
+
+def sigPairCode (p n width a b : Nat) : Nat :=
+  if a < b then
+    let va := 1 <<< a
+    let vb := 1 <<< b
+    forceW (sigPatternGuard width a b 0) fun g0 =>
+    forceW (sigPatternGuard width a b 1) fun g1 =>
+    forceW (sigPatternGuard width a b 2) fun g2 =>
+    forceW (sigCross p n va) fun ca =>
+    forceW (sigCross p n vb) fun cb =>
+    forceW (sigCross p n (va + vb)) fun cs =>
+    forceW (sigCross p n (vb - va)) fun cd =>
+      sigUnit 0 (!(Nat.beq (ca &&& g0) 0)) ||| sigUnit 1 (!(Nat.beq (cb &&& g0) 0)) |||
+        sigUnit 2 (!(Nat.beq (cs &&& g0) 0)) ||| sigUnit 3 (!(Nat.beq (cd &&& g1) 0)) |||
+        sigUnit 4 (!(Nat.beq (cb &&& g1) 0)) ||| sigUnit 5 (!(Nat.beq (ca &&& g2) 0))
+  else 0
+
+theorem sigPairCode_witness {p n width a b i : Nat}
+    (hit : (sigPairCode p n width a b).testBit i = true) :
+    a < b ∧ i < 6 ∧ sigPatternVal a b (sigPairLo i) ≤ sigPatternVal a b (sigPairHi i) ∧
+      ((sigCross p n (sigPatternVal a b (sigPairHi i) - sigPatternVal a b (sigPairLo i))) &&&
+        sigPatternGuard width a b (sigPairLo i)) ≠ 0 := by
+  by_cases ab : a < b
+  · have vp : (1 : Nat) <<< a ≤ 1 <<< b := by
+      simp only [Nat.shiftLeft_eq, Nat.one_mul]
+      exact Nat.pow_le_pow_right (by decide) ab.le
+    have val := sigPatternVal3 ab.ne
+    simp only [sigPairCode, ab, ite_true, forceW_eq, Nat.testBit_or, sigUnit_testBit,
+      Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at hit
+    rcases hit with (((((⟨rfl, hit⟩ | ⟨rfl, hit⟩) | ⟨rfl, hit⟩) | ⟨rfl, hit⟩) | ⟨rfl, hit⟩) | ⟨rfl, hit⟩)
+    all_goals
+      have nz := ne_of_beq_false hit
+      refine ⟨ab, by decide, ?_, ?_⟩
+      · simp [sigPairLo, sigPairHi, sigPatternVal0, sigPatternVal1, sigPatternVal2, val, vp]
+      · simpa [sigPairLo, sigPairHi, sigPatternVal0, sigPatternVal1, sigPatternVal2, val] using nz
+  · simp [sigPairCode, ab] at hit
+
+def sigRawGate (op : Nat) (x y : Bool) : Bool :=
+  bsel (Nat.beq op 0) (x && y)
+    (bsel (Nat.beq op 1) (x || y) (bsel (Nat.beq op 2) (x && !y) (!x && y)))
+
+def sigRuleMask (op keep : Nat) : Nat :=
+  if op < 4 ∧ keep < 4 then
+    (([[11, 2, 1, 0], [56, 16, 32, 0], [38, 2, 32, 0], [21, 16, 1, 0]] :
+      List (List Nat)).getD op []).getD keep 0
+  else 0
+
+private theorem sigRuleMask_small : ∀ (op keep : Fin 4) (i : Fin 6),
+    (sigRuleMask op.val keep.val).testBit i.val = true →
+    (Nat.beq (keep.val &&& 1) 1 = true → (sigPairLo i.val).testBit 0 = (sigPairHi i.val).testBit 0) ∧
+    (Nat.beq ((keep.val >>> 1) &&& 1) 1 = true → (sigPairLo i.val).testBit 1 = (sigPairHi i.val).testBit 1) ∧
+    sigRawGate op.val ((sigPairLo i.val).testBit 0) ((sigPairLo i.val).testBit 1) =
+      sigRawGate op.val ((sigPairHi i.val).testBit 0) ((sigPairHi i.val).testBit 1) := by decide +kernel
+
+theorem sigRuleMask_sound {op keep i : Nat} (hi : i < 6)
+    (h : (sigRuleMask op keep).testBit i = true) :
+    (Nat.beq (keep &&& 1) 1 = true → (sigPairLo i).testBit 0 = (sigPairHi i).testBit 0) ∧
+    (Nat.beq ((keep >>> 1) &&& 1) 1 = true → (sigPairLo i).testBit 1 = (sigPairHi i).testBit 1) ∧
+    sigRawGate op ((sigPairLo i).testBit 0) ((sigPairLo i).testBit 1) =
+      sigRawGate op ((sigPairHi i).testBit 0) ((sigPairHi i).testBit 1) := by
+  by_cases bounds : op < 4 ∧ keep < 4
+  · exact sigRuleMask_small ⟨op, bounds.1⟩ ⟨keep, bounds.2⟩ ⟨i, hi⟩ h
+  · simp [sigRuleMask, bounds] at h
+
+def sigPairPrune (code op keep : Nat) : Bool := !(Nat.beq (code &&& sigRuleMask op keep) 0)
+
+
+private theorem sigBinOp_agrees {mask op x y p n : Nat}
+    (hp : mask.testBit p = true) (hn : mask.testBit n = true)
+    (eq : sigRawGate op (x.testBit p) (y.testBit p) = sigRawGate op (x.testBit n) (y.testBit n)) :
+    (binOp mask op x y).testBit p = (binOp mask op x y).testBit n := by
+  unfold binOp sigRawGate at *
+  cases e0 : Nat.beq op 0 <;> cases e1 : Nat.beq op 1 <;> cases e2 : Nat.beq op 2 <;>
+    simp only [e0, e1, e2, bsel_true, bsel_false] at eq ⊢ <;>
+    apply (canon_testBit_eq hp hn).mpr <;>
+    simpa [Nat.testBit_and, Nat.testBit_or, Nat.testBit_xor, hp, hn] using eq
+
+private theorem sigNeg_care {mask goal row : Nat}
+    (hit : (mask ^^^ (goal &&& mask)).testBit row = true) :
+    (mask ^^^ goal).testBit row = true ∧ mask.testBit row = true := by
+  simp only [Nat.testBit_xor, Nat.testBit_and] at hit ⊢
+  cases hm : mask.testBit row <;> cases hg : goal.testBit row <;> simp_all
+
+theorem sigPairPrune_part {mask goal a b op keep : Nat} {ws : List Nat}
+    (hit : sigPairPrune (sigPairCode (sigOccupied ws (goal &&& mask) 64)
+      (sigOccupied ws (mask ^^^ (goal &&& mask)) 64) ws.length a b) op keep = true) :
+    let x := ws.getD a 0
+    let y := ws.getD b 0
+    let z := binOp mask op x y
+    let keepA := Nat.beq (keep &&& 1) 1
+    let keepB := Nat.beq ((keep >>> 1) &&& 1) 1
+    dagPart (insertSorted z (dropVal (!keepA) x (dropVal (!keepB) y ws)))
+      goal (mask ^^^ goal) = false := by
+  simp only [sigPairPrune, Bool.not_eq_true'] at hit
+  have bit := Nat.testBit_log2 (ne_of_beq_false hit)
+  rw [Nat.testBit_and, Bool.and_eq_true] at bit
+  obtain ⟨ab, pair_bound, increasing, cross⟩ := sigPairCode_witness bit.1
+  have valid := sigRuleMask_sound pair_bound bit.2
+  obtain ⟨l, r, signs, lo, hi, same⟩ :=
+    sigCross_pattern_sound ab.ne increasing (fun _ => sigPatternGuard_sound) cross
+  have ⟨al, bl⟩ := lo
+  have ⟨ar, br⟩ := hi
+  rw [wireSig_testBit] at al bl ar br
+  have pos {row} (yes : (goal &&& mask).testBit row = true) :
+      goal.testBit row = true ∧ mask.testBit row = true := by
+    simpa only [Nat.testBit_and, Bool.and_eq_true] using yes
+  have care : mask.testBit l = true ∧ mask.testBit r = true := by
+    rcases signs with ⟨hp, hn⟩ | ⟨hn, hp⟩
+    · exact ⟨(pos hp).2, (sigNeg_care hn).2⟩
+    · exact ⟨(sigNeg_care hn).2, (pos hp).2⟩
+  have gate := sigBinOp_agrees care.1 care.2 (x := ws.getD a 0) (y := ws.getD b 0) (op := op) (by
+    rw [al, bl, ar, br]
+    exact valid.2.2)
+  dsimp only
+  have agrees : ∀ w ∈ insertSorted (binOp mask op (ws.getD a 0) (ws.getD b 0))
+      (dropVal (!(Nat.beq (keep &&& 1) 1)) (ws.getD a 0)
+        (dropVal (!(Nat.beq ((keep >>> 1) &&& 1) 1)) (ws.getD b 0) ws)),
+      w.testBit l = w.testBit r := by
+    intro w hw
+    rcases insertSorted_mem.mp hw with rfl | mem
+    · exact gate
+    · obtain ⟨earlier, dropA⟩ := dropVal_mem.mp mem
+      obtain ⟨stock, dropB⟩ := dropVal_mem.mp earlier
+      obtain ⟨i, _, iw⟩ := getElem_index_lt stock
+      rw [← iw]
+      by_cases ia : i = a
+      · subst i
+        have keepA : Nat.beq (keep &&& 1) 1 = true := by
+          cases e : Nat.beq (keep &&& 1) 1
+          · exact (dropA (by rw [e, Bool.not_false]) iw.symm).elim
+          · rfl
+        exact al.trans ((valid.1 keepA).trans ar.symm)
+      · by_cases ib : i = b
+        · subst i
+          have keepB : Nat.beq ((keep >>> 1) &&& 1) 1 = true := by
+            cases e : Nat.beq ((keep >>> 1) &&& 1) 1
+            · exact (dropB (by rw [e, Bool.not_false]) iw.symm).elim
+            · rfl
+          exact bl.trans ((valid.2.1 keepB).trans br.symm)
+        · exact same i ia ib
+  rcases signs with ⟨hp, hn⟩ | ⟨hn, hp⟩
+  · exact dagPart_false_of_agreement (pos hp).1 (sigNeg_care hn).1 agrees
+  · exact dagPart_false_of_agreement (pos hp).1 (sigNeg_care hn).1 (fun w hw => (agrees w hw).symm)
+
+def sigDagPos (mask goal : Nat) (ws : List Nat) : Nat :=
+  if mask = fullMask then sigOccupied ws (goal &&& mask) 64 else 0
+
+def sigDagNeg (mask goal : Nat) (ws : List Nat) : Nat :=
+  if mask = fullMask then sigOccupied ws (mask ^^^ (goal &&& mask)) 64 else 0
+
+def sigDagCode (mask p n width a b : Nat) : Nat :=
+  if mask = fullMask then sigPairCode p n width a b else 0
+
+def sigDagLocalF (mask goal : Nat) (bounds : List (Nat × List Nat × Nat × Nat))
+    (state : Nat × List Nat × List (Nat × Nat × Nat)) (linked : Bool) : Bool :=
+  if mask = fullMask then
+    let (fuel, ws, _) := state
+    Bool.rec (Bool.rec (Bool.rec (Bool.rec true false (dagPartF ws goal (Nat.xor mask goal)))
+      true linked) true (knownClosesF bounds state)) true (Nat.blt (Nat.add fuel 1) (lenN ws))
+  else Bool.rec linked true (dagLocalF mask goal bounds state)
+
+theorem sigDagLocalF_eq {mask goal : Nat} {bounds : List (Nat × List Nat × Nat × Nat)}
+    (hgoals : ∀ b ∈ bounds, canon b.1 goal = b.2.2.2 ∧ b.2.2.2 ≠ 0)
+    (state : Nat × List Nat × List (Nat × Nat × Nat)) (linked : Bool) :
+    sigDagLocalF mask goal bounds state linked = (dagLocal mask goal bounds state || linked) := by
+  by_cases big : mask = fullMask
+  · obtain ⟨fuel, ws, hist⟩ := state
+    simp only [sigDagLocalF, ite_eq_left big, lenN_eq, dagPartF_eq, knownClosesF_eq hgoals, dagLocal]
+    cases Nat.blt (fuel + 1) ws.length <;> cases dagPart ws goal (mask ^^^ goal) <;>
+      cases knownCloses goal bounds (fuel, ws, hist) <;> cases linked <;> rfl
+  · simp only [sigDagLocalF, ite_eq_right big, dagLocalF_eq hgoals]
+    cases dagLocal mask goal bounds state <;> rfl
+
+theorem sigDagPrune_or_eq (mask goal a b op keep fuel : Nat) (ws : List Nat)
+    (hist : List (Nat × Nat × Nat)) (bounds : List (Nat × List Nat × Nat × Nat)) (linked : Bool) :
+    let x := ws.getD a 0
+    let y := ws.getD b 0
+    let z := binOp mask op x y
+    let keepA := Nat.beq (keep &&& 1) 1
+    let keepB := Nat.beq ((keep >>> 1) &&& 1) 1
+    let state := (fuel, insertSorted z (dropVal (!keepA) x (dropVal (!keepB) y ws)), hist)
+    let prune := sigPairPrune (sigDagCode mask (sigDagPos mask goal ws) (sigDagNeg mask goal ws)
+      ws.length a b) op keep
+    (prune || (dagLocal mask goal bounds state || linked)) =
+      (dagLocal mask goal bounds state || linked) := by
+  dsimp only
+  cases hit : sigPairPrune (sigDagCode mask (sigDagPos mask goal ws) (sigDagNeg mask goal ws)
+      ws.length a b) op keep
+  · rfl
+  · by_cases big : mask = fullMask
+    · simp only [sigDagCode, sigDagPos, sigDagNeg, ite_eq_left big] at hit
+      have bad := sigPairPrune_part hit
+      unfold dagLocal
+      dsimp only at bad ⊢
+      rw [bad]
+      simp
+    · simp [sigDagCode, big, sigPairPrune] at hit
+
+private theorem sigNatSub_eq (a b : Nat) : Nat.sub a b = a - b := rfl
+
+
 def dagCheckChildrenF (mask goal : Nat) (bounds : Nat → List (Nat × List Nat × Nat × Nat))
     (ref : Nat → (Nat × List Nat × List (Nat × Nat × Nat)) → Bool)
     (state : Nat × List Nat × List (Nat × Nat × Nat)) : Bool :=
@@ -2310,10 +2779,13 @@ def dagCheckChildrenF (mask goal : Nat) (bounds : Nat → List (Nat × List Nat 
   Bool.rec
     (Bool.rec
       (Bool.rec false
-        (treeBlockF 0 n (fun a =>
+        (forceW (sigDagPos mask goal ws) (fun pos =>
+          forceW (sigDagNeg mask goal ws) (fun neg =>
+          treeBlockF 0 n (fun a =>
           let x := getDN ws a
           treeBlockF (Nat.add a 1) n (fun b =>
             let y := getDN ws b
+            forceW (sigDagCode mask pos neg n a b) (fun code =>
             treeBlockF 0 4 (fun op =>
               forceW (binOpF mask op x y) (fun z =>
                 Bool.rec
@@ -2323,13 +2795,15 @@ def dagCheckChildrenF (mask goal : Nat) (bounds : Nat → List (Nat × List Nat 
                       let keepB := Nat.beq (Nat.land (Nat.shiftRight keep 1) 1) 1
                       let newLen := Nat.add (Nat.add (Nat.sub n 1) (Bool.rec 0 1 keepA)) (Bool.rec 0 1 keepB)
                       Bool.rec
-                        (forceWs (insertSortedF z (dropValF (Bool.rec true false keepA) x (dropValF (Bool.rec true false keepB) y ws))) (fun ws' =>
+                        (Bool.rec
+                          (forceWs (insertSortedF z (dropValF (Bool.rec true false keepA) x (dropValF (Bool.rec true false keepB) y ws))) (fun ws' =>
                           let ch := (Nat.sub fuel 1, ws', (z, x, y) :: hist)
                           let tok := Nat.add (Nat.shiftLeft (Nat.add (Nat.shiftLeft (Nat.add (Nat.shiftLeft a 4) b) 2) op) 2) keep
-                          Bool.rec (ref tok ch) true (dagLocalF mask goal (bounds tok) ch)))
+                          sigDagLocalF mask goal (bounds tok) ch (ref tok ch)))
+                          true (sigPairPrune code op keep))
                         true (Nat.blt fuel newLen)))
                     true (memN z ws))
-                  true (Nat.beq z 0))))))
+                  true (Nat.beq z 0)))))))))
         (Nat.blt n 17))
       true (Nat.beq fuel 0))
     false (memN goal ws)
@@ -2352,7 +2826,7 @@ theorem dagCheckChildrenF_eq {mask goal : Nat} {bounds : Nat → List (Nat × Li
     dagCheckChildrenF mask goal bounds ref state = dagCheckChildren mask goal bounds ref state := by
   obtain ⟨fuel, ws, hist⟩ := state
   unfold dagCheckChildrenF dagCheckChildren; dsimp only
-  simp only [lenN_eq, memN_eq, treeBlockF_eq]
+  simp only [forceW_eq, lenN_eq, memN_eq, treeBlockF_eq]
   cases ws.contains goal
   · cases Nat.beq fuel 0
     · cases Nat.blt ws.length 17
@@ -2363,18 +2837,28 @@ theorem dagCheckChildrenF_eq {mask goal : Nat} {bounds : Nat → List (Nat × Li
         simp only [getDN_eq]
         apply congrArg (treeBlock (a + 1) ws.length); funext b
         apply congrArg (treeBlock 0 4); funext op
-        simp only [binOpF_eq, forceW_eq]
+        simp only [binOpF_eq]
         cases Nat.beq (binOp mask op (ws.getD a 0) (ws.getD b 0)) 0
         · cases ws.contains (binOp mask op (ws.getD a 0) (ws.getD b 0))
           · dsimp only; simp only [Bool.false_or]
             apply congrArg (treeBlock 0 4); funext keep
             simp only [insertSortedF_eq, dropValF_eq, forceWs_eq, makeTokenF_eq,
-              dagLocalF_eq (hgoals (makeToken a b op keep)), localOr]
-            cases Nat.beq (keep &&& 1) 1 <;> cases Nat.beq ((keep >>> 1) &&& 1) 1
+              sigDagLocalF_eq (hgoals (makeToken a b op keep)), localOr]
+            cases ha : Nat.beq (keep &&& 1) 1 <;> cases hb : Nat.beq ((keep >>> 1) &&& 1) 1
             all_goals dsimp only
             all_goals simp only [Bool.false_eq_true, ite_true, ite_false, Bool.not_true, Bool.not_false]
             all_goals cases Nat.blt fuel _
-            all_goals rfl
+            all_goals try rfl
+            all_goals simp only [Bool.false_or, sigNatSub_eq]
+            all_goals
+              let x := ws.getD a 0
+              let y := ws.getD b 0
+              let z := binOp mask op x y
+              let ch := (fuel - 1, insertSorted z (dropVal (!(Nat.beq (keep &&& 1) 1)) x
+                (dropVal (!(Nat.beq ((keep >>> 1) &&& 1) 1)) y ws)), (z, x, y) :: hist)
+              have eq := sigDagPrune_or_eq mask goal a b op keep (fuel - 1) ws ((z, x, y) :: hist)
+                (bounds (makeToken a b op keep)) (ref (makeToken a b op keep) ch)
+              simpa only [ch, x, y, z, ha, hb, Bool.not_true, Bool.not_false] using eq
           · rfl
         · rfl
     · rfl
