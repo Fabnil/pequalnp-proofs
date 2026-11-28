@@ -540,10 +540,12 @@ private theorem monoOfShape {C : Circuit} (shape : BinaryBack n C) : Monotone2 C
   obtain ⟨hop, a, b, hab, _⟩ := shape j g hj
   exact ⟨by simpa using hop, by simp [hab]⟩
 
-private theorem eraseWhenAlias {C : Circuit} (x : Fin n → Bool) {j p : ℕ} {g : Gate}
+private theorem relateErasure {C : Circuit} (x : Fin n → Bool) {j p : ℕ} {g : Gate}
     (hg : C.gates[j]? = some g) (hp : p < n + j)
-    (same : value C x (n + j) = value C x p) :
-    (eraseGate n C j p).eval (List.ofFn x) = C.eval (List.ofFn x) := by
+    (rel : Bool → Bool → Prop) (refl : ∀ b, rel b b)
+    (preserved : ∀ g ∈ C.gates, Hop rel g)
+    (localRel : rel (value C x (n + j)) (value C x p)) :
+    rel (C.eval (List.ofFn x)) ((eraseGate n C j p).eval (List.ofFn x)) := by
   obtain ⟨hj, hjg⟩ := List.getElem?_eq_some_iff.mp hg
   let pre := C.gates.take j
   let post := C.gates.drop (j + 1)
@@ -558,10 +560,16 @@ private theorem eraseWhenAlias {C : Circuit} (x : Fin n → Bool) {j p : ℕ} {g
     simp [hlen]
   have low : value C x p = (run pre (List.ofFn x)).getD p false :=
     wire_low n C pre post g split _ (by simp) _ (by rwa [hpre])
-  have sameAtPrefix := evalGate.symm.trans (same.trans low)
-  have h := erase_rel Eq (fun _ => rfl) n C p pre post g split (by rwa [hpre])
-    (List.ofFn x) (by simp) (fun g _ => hop_eq g) sameAtPrefix
-  simpa only [hpre] using h.symm
+  rw [evalGate, low] at localRel
+  have h := erase_rel rel refl n C p pre post g split (by rwa [hpre])
+    (List.ofFn x) (by simp) (fun q hq => preserved q (List.mem_of_mem_drop hq)) localRel
+  simpa only [hpre] using h
+
+private theorem eraseWhenAlias {C : Circuit} (x : Fin n → Bool) {j p : ℕ} {g : Gate}
+    (hg : C.gates[j]? = some g) (hp : p < n + j)
+    (same : value C x (n + j) = value C x p) :
+    (eraseGate n C j p).eval (List.ofFn x) = C.eval (List.ofFn x) :=
+  (relateErasure x hg hp Eq (fun _ => rfl) (fun g _ => hop_eq g) same).symm
 
 private theorem eraseSize {C : Circuit} {j : ℕ} (hj : j < C.gates.length) (p n : ℕ) :
     (eraseGate n C j p).size + 1 = C.size := by
@@ -670,6 +678,78 @@ private theorem shrinkFork {C : Circuit} (shape : BinaryBack n C)
       simp [eB, eA]
     · simp [below x e]
 
+private theorem shrinkAndReader {C : Circuit} (shape : BinaryBack n C)
+    {w j : ℕ} {g : Gate} (hg : C.gates[j]? = some g) (hop : g.op = .and) (hr : w ∈ g.inputs)
+    (below : ∀ x : Fin n → Bool, value C x w = true → C.eval (List.ofFn x) = true) :
+    ∃ D, Monotone2 D ∧ D.size < C.size ∧
+      ∀ x : Fin n → Bool, D.eval (List.ofFn x) = C.eval (List.ofFn x) := by
+  have hj := (List.getElem?_eq_some_iff.mp hg).1
+  have hw := readsEarlier shape hg hr
+  refine ⟨eraseGate n C j w, eraseMono hj w n (monoOfShape shape), ?_, ?_⟩
+  · have h := eraseSize hj w n
+    omega
+  · intro x
+    have implication : value C x (n+j) = true → value C x w = true := by
+      intro h
+      rw [gateValue x hg (fun _ hm => readsEarlier shape hg hm), hop, GateOp.eval] at h
+      exact List.all_eq_true.mp h _ (List.mem_map_of_mem hr)
+    cases e : C.eval (List.ofFn x)
+    · have hwfalse : value C x w = false := by
+        cases h : value C x w
+        · rfl
+        · have h' := below x h
+          rw [e] at h'
+          contradiction
+      have hgfalse : value C x (n+j) = false := by
+        cases h : value C x (n+j)
+        · rfl
+        · rw [hwfalse] at implication
+          have := implication h
+          contradiction
+      exact (eraseWhenAlias x hg hw (hgfalse.trans hwfalse.symm)).trans e
+    · have hp (q : Gate) (hq : q ∈ C.gates) :
+          Hop (fun a b => a = true → b = true) q := by
+        obtain ⟨k, hk⟩ := List.getElem?_of_mem hq
+        exact hop_le q (shape k q hk).1
+      exact relateErasure x hg hw (fun a b => a = true → b = true)
+        (fun _ h => h) hp implication e
+
+/-- An AND never reads a wire implying the output of a minimum monotone circuit. -/
+theorem no_and_reader_of_below_output {C : Circuit} (shape : BinaryBack n C) {w j : ℕ} {g : Gate}
+    (minimal : ∀ D : Circuit, Monotone2 D →
+      (∀ x : Fin n → Bool, D.eval (List.ofFn x) = C.eval (List.ofFn x)) → C.size ≤ D.size)
+    (below : ∀ x : Fin n → Bool, value C x w = true → C.eval (List.ofFn x) = true)
+    (hg : C.gates[j]? = some g) (hr : w ∈ g.inputs) : g.op ≠ .and := by
+  intro hand
+  obtain ⟨D, hm, hsz, hval⟩ := shrinkAndReader shape hg hand hr below
+  exact (not_lt_of_ge (minimal D hm hval) hsz)
+
+/-- Every wire implying the output of a minimum monotone circuit has at most one reader. -/
+theorem one_reader_of_below_output {C : Circuit} (shape : BinaryBack n C) (w : ℕ)
+    (minimal : ∀ D : Circuit, Monotone2 D →
+      (∀ x : Fin n → Bool, D.eval (List.ofFn x) = C.eval (List.ofFn x)) → C.size ≤ D.size)
+    (below : ∀ x : Fin n → Bool, value C x w = true → C.eval (List.ofFn x) = true) :
+    ((Finset.range C.gates.length).filter fun j =>
+      w ∈ (NestedCover.gateAt C j).inputs).card ≤ 1 := by
+  apply Finset.card_le_one.mpr
+  intro j hj k hk
+  obtain ⟨hj, hjw⟩ := Finset.mem_filter.mp hj
+  obtain ⟨hk, hkw⟩ := Finset.mem_filter.mp hk
+  have hj' := Finset.mem_range.mp hj
+  have hk' := Finset.mem_range.mp hk
+  have getJ : C.gates[j]? = some (NestedCover.gateAt C j) := by
+    simp [NestedCover.gateAt, List.getD_eq_getElem?_getD, hj']
+  have getK : C.gates[k]? = some (NestedCover.gateAt C k) := by
+    simp [NestedCover.gateAt, List.getD_eq_getElem?_getD, hk']
+  have oj := ((shape j _ getJ).1).resolve_left (no_and_reader_of_below_output shape minimal below getJ hjw)
+  have ok := ((shape k _ getK).1).resolve_left (no_and_reader_of_below_output shape minimal below getK hkw)
+  by_contra ne
+  rcases lt_or_gt_of_ne ne with before | before
+  · obtain ⟨D, hm, hsz, hval⟩ := shrinkFork shape before getJ getK oj ok hjw hkw below
+    exact (not_lt_of_ge (minimal D hm hval) hsz)
+  · obtain ⟨D, hm, hsz, hval⟩ := shrinkFork shape before getK getJ ok oj hkw hjw below
+    exact (not_lt_of_ge (minimal D hm hval) hsz)
+
 private theorem shrinkShared {C : Circuit} (shape : BinaryBack n C)
     {i j a b : ℕ} {g : Gate} (hg : C.gates[j]? = some g) (hop : g.op = .and)
     (hab : g.inputs = [a, b])
@@ -768,6 +848,29 @@ theorem three_pair_ands_of_common_merge {C : Circuit} {r s : Fin n} {j : ℕ}
   obtain ⟨D, hm, hsz, hval⟩ := shrinkShared shape hg hop hab pa pb last
   exact (not_lt_of_ge (minimal D hm hval) hsz)
 
+private theorem minimalFano (C : Circuit) (hsize : C.size ≤ 27)
+    (compute : ∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = true ↔
+      PEqualNP.Outside.L_meta_17589_aux.FanoE x) :
+    ∀ D : Circuit, Monotone2 D →
+      (∀ x : Fin 14 → Bool, D.eval (List.ofFn x) = C.eval (List.ofFn x)) → C.size ≤ D.size := by
+  intro D hm hval
+  have hlo := PEqualNP.Outside.L_meta_17589_aux.fano27 D hm (fun x => by rw [hval, compute])
+  omega
+
+theorem fano_sound_wire_readers (C : Circuit) (hsize : C.size ≤ 27)
+    (shape : BinaryBack 14 C)
+    (compute : ∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = true ↔
+      PEqualNP.Outside.L_meta_17589_aux.FanoE x)
+    (w : ℕ) (below : ∀ x : Fin 14 → Bool, value C x w = true →
+      PEqualNP.Outside.L_meta_17589_aux.FanoE x) :
+    (∀ (j : ℕ) (g : Gate), C.gates[j]? = some g → w ∈ g.inputs → g.op ≠ .and) ∧
+    ((Finset.range C.gates.length).filter fun j =>
+      w ∈ (NestedCover.gateAt C j).inputs).card ≤ 1 := by
+  have b (x : Fin 14 → Bool) (h : value C x w = true) :
+      C.eval (List.ofFn x) = true := (compute x).mpr (below x h)
+  exact ⟨fun _ _ hg hw => no_and_reader_of_below_output shape (minimalFano C hsize compute) b hg hw,
+    one_reader_of_below_output shape w (minimalFano C hsize compute) b⟩
+
 theorem fano_double_read_active_ands (C : Circuit) (hsize : C.size ≤ 27)
     (shape : BinaryBack 14 C)
     (compute : ∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = true ↔
@@ -791,10 +894,7 @@ theorem fano_double_read_active_ands (C : Circuit) (hsize : C.size ≤ 27)
       · exact False.elim ((by unfold PEqualNP.Outside.L_meta_17589_aux.FanoE; decide :
           ¬ PEqualNP.Outside.L_meta_17589_aux.FanoE (single (7 : Fin 14)))
           ((compute _).mp h))
-  refine three_active_ands_of_minimal shape hd he hw hd' he' ?_
-  intro D hm hval
-  have hlo := PEqualNP.Outside.L_meta_17589_aux.fano27 D hm (fun x => by rw [hval, compute])
-  omega
+  exact three_active_ands_of_minimal shape hd he hw hd' he' (minimalFano C hsize compute)
 
 end PEqualNP.Outside.DoubleReadTrace
 
@@ -802,3 +902,5 @@ end PEqualNP.Outside.DoubleReadTrace
 #print axioms PEqualNP.Outside.DoubleReadTrace.three_active_ands_or_shared_source
 #print axioms PEqualNP.Outside.DoubleReadTrace.fano_double_read_active_ands
 #print axioms PEqualNP.Outside.DoubleReadTrace.three_pair_ands_of_common_merge
+#print axioms PEqualNP.Outside.DoubleReadTrace.one_reader_of_below_output
+#print axioms PEqualNP.Outside.DoubleReadTrace.fano_sound_wire_readers
