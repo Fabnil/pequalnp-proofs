@@ -1,6 +1,7 @@
 import PEqualNP.Defs
 import PEqualNP.Outside.L_meta_17589
 import PEqualNP.Outside.L_meta_18546
+import PEqualNP.Outside.L_meta_18556
 
 namespace PEqualNP.Outside.DoubleReadTrace
 
@@ -895,6 +896,235 @@ theorem fano_double_read_active_ands (C : Circuit) (hsize : C.size ≤ 27)
           ¬ PEqualNP.Outside.L_meta_17589_aux.FanoE (single (7 : Fin 14)))
           ((compute _).mp h))
   exact three_active_ands_of_minimal shape hd he hw hd' he' (minimalFano C hsize compute)
+
+namespace MarkedColumns
+
+abbrev Column := Fin 62 → Bool
+
+def sourceWords : List ℕ :=
+  [2594090156585648135, 15270196031782968, 58150373818816, 94946423956573696,
+   54820275478360064, 3870282840506368, 133412159488, 1911954591369396745,
+   218716039641305168, 189725234880873600, 156548607028504576, 229736628137050114,
+   270286071509155872, 288160007408582916]
+
+def stock : List Column := sourceWords.map fun w j => w.testBit j.val
+
+def columnAt (L : List Column) (w : ℕ) : Column := L.getD w fun _ => false
+
+def target : Column := fun j => decide (j.val < 21)
+
+def joinCols (a b : Column) : Column := fun j => a j || b j
+
+def meetCols (a b : Column) : Column := fun j =>
+  if j = 60 then a 58 && b 60 || a 60 && b 58
+  else if j = 61 then a 59 && b 61 || a 61 && b 59
+  else a j && b j
+
+def ApplyGate : GateOp → Column → Column → Column
+  | .and => meetCols
+  | .or => joinCols
+  | _ => meetCols
+
+def HasTraceSteps (L : List Column) : Prop :=
+  ∀ j < L.length, ∃ a b, a ≠ b ∧ a < 14 + j ∧ b < 14 + j ∧
+    let x := columnAt (stock ++ L) a
+    let y := columnAt (stock ++ L) b
+    columnAt L j = joinCols x y ∨ (0 < j ∧ columnAt L j = meetCols x y)
+
+private theorem stockLength : stock.length = 14 := rfl
+
+private theorem atSource (L : List Column) {w : ℕ} (h : w < 14) :
+    columnAt (stock ++ L) w = columnAt stock w := by
+  simp only [columnAt, List.getD_eq_getElem?_getD, List.getElem?_append_left (stockLength.symm ▸ h)]
+
+private theorem atStage (L : List Column) (j : ℕ) :
+    columnAt (stock ++ L) (14 + j) = columnAt L j := by
+  have h : stock.length ≤ 14 + j := by simp [stockLength]
+  simp only [columnAt, List.getD_eq_getElem?_getD, List.getElem?_append_right h,
+    stockLength, Nat.add_sub_cancel_left]
+
+def capped (singleton linear : Bool) : ℕ :=
+  if singleton then 0 else if linear then 1 else 2
+
+private theorem capped_join : ∀ a b c d : Bool,
+    capped (a || c) (b || d) ≤ min (capped a b) (capped c d) := by decide +kernel
+
+private theorem capped_meet : ∀ a b c d : Bool,
+    capped (a && c) (a && d || b && c) ≤ capped a b + capped c d := by decide +kernel
+
+def degree (flip : Bool) (f : Column) : ℕ :=
+  capped (f (if flip then 58 else 59)) (f (if flip then 60 else 61))
+
+private theorem roots (flip : Bool) :
+    degree flip (columnAt stock (if flip then 7 else 0)) ≤ 1 ∧
+    degree flip (columnAt stock (if flip then 0 else 7)) = 0 := by
+  cases flip <;> decide +kernel
+
+private theorem degree_join (flip : Bool) (x y : Column) :
+    degree flip (joinCols x y) ≤ min (degree flip x) (degree flip y) :=
+  capped_join _ _ _ _
+
+private theorem degree_meet (flip : Bool) (x y : Column) :
+    degree flip (meetCols x y) ≤ degree flip x + degree flip y := by
+  cases flip
+  · exact capped_meet (x 59) (x 61) (y 59) (y 61)
+  · exact capped_meet (x 58) (x 60) (y 58) (y 60)
+
+/-- A marker stores the existence of a derivation using the designated input once.
+The opposite singleton stores the zero-use case, so the pair yields a capped read certificate. -/
+theorem readCertificate (C : Circuit) (L : List Column)
+    (step : ∀ j g a b, C.gates[j]? = some g → g.inputs = [a, b] →
+      columnAt (stock ++ L) (14 + j) =
+        ApplyGate g.op (columnAt (stock ++ L) a) (columnAt (stock ++ L) b))
+    (flip : Bool) : ReadCertificate C (if flip then (7 : Fin 14) else 0)
+      (if flip then (0 : Fin 14) else 7) (fun w => degree flip (columnAt (stock ++ L) w)) := by
+  constructor
+  · have h : (if flip then (7 : Fin 14) else 0).val < 14 := (if flip then (7 : Fin 14) else 0).isLt
+    dsimp only
+    rw [atSource L h]
+    cases flip <;> exact (roots _).1
+  constructor
+  · have h : (if flip then (0 : Fin 14) else 7).val < 14 := (if flip then (0 : Fin 14) else 7).isLt
+    dsimp only
+    rw [atSource L h]
+    cases flip <;> exact (roots _).2
+  intro j g a b hg hab
+  dsimp only
+  rw [step j g a b hg hab]
+  constructor <;> intro h
+  · rw [h, ApplyGate]
+    exact degree_meet flip _ _
+  · rw [h, ApplyGate]
+    exact degree_join flip _ _
+
+private def testIndex (j : Fin 58) : Fin 62 := ⟨j.val, by have := j.isLt; omega⟩
+
+private def test (j : Fin 58) (p : Fin 14) : Bool := columnAt stock p.val (testIndex j)
+
+private theorem normalMeet (x y : Column) (j : Fin 58) :
+    meetCols x y (testIndex j) = (x (testIndex j) && y (testIndex j)) := by
+  have hu : testIndex j ≠ 60 := by intro h; have := congrArg Fin.val h; change j.val = 60 at this; omega
+  have hv : testIndex j ≠ 61 := by intro h; have := congrArg Fin.val h; change j.val = 61 at this; omega
+  simp [meetCols, hu, hv]
+
+private theorem matchesTest (C : Circuit) (L : List Column) (shape : BinaryBack 14 C)
+    (step : ∀ j g a b, C.gates[j]? = some g → g.inputs = [a, b] →
+      columnAt (stock ++ L) (14 + j) =
+        ApplyGate g.op (columnAt (stock ++ L) a) (columnAt (stock ++ L) b))
+    (t : Fin 58) (w : ℕ) (hw : w < 14 + C.gates.length) :
+    value C (test t) w = columnAt (stock ++ L) w (testIndex t) := by
+  induction w using Nat.strong_induction_on with
+  | ind w ih =>
+    by_cases h : w < 14
+    · rw [atInput C (test t) ⟨w,h⟩, atSource L h]
+      rfl
+    obtain ⟨j, g, a, b, rfl, hg, hop, hab, _, ha, hb⟩ := gateFor shape (by omega) hw
+    have ha' := ih a ha (ha.trans hw)
+    have hb' := ih b hb (hb.trans hw)
+    rcases hop with hop | hop
+    · rw [andValue (test t) hg hab ha hb hop, step j g a b hg hab, hop, ApplyGate,
+          normalMeet, ha', hb']
+    · rw [orValue (test t) hg hab ha hb hop, step j g a b hg hab, hop, ApplyGate, joinCols, ha', hb']
+
+private def related (p l : Fin 7) : Prop := p = l ∨ p = l + 1 ∨ p = l + 3
+
+private instance (p l : Fin 7) : Decidable (related p l) :=
+  inferInstanceAs (Decidable (_ ∨ _ ∨ _))
+
+private def negatives : List ℕ :=
+  [16256, 5889, 11778, 1539, 7300, 5125, 3078, 14600, 4361, 10250,
+   6156, 12944, 4625, 8722, 4244, 12312, 4125, 9632, 1313, 9250, 1188,
+   1063, 8488, 8368, 8250, 3008, 833, 2626, 2244, 2376, 2126, 720,
+   595, 480, 361, 244, 127]
+
+set_option maxHeartbeats 6000000 in
+private theorem positivesPresent : ∀ p l : Fin 7, related p l →
+    ∃ j : Fin 21, ∀ i : Fin 14,
+      test (Fin.castAdd 37 j) i = decide (i = Fin.castAdd 7 p ∨ i = Fin.natAdd 7 l) := by
+  decide +kernel
+
+set_option maxHeartbeats 6000000 in
+private theorem negativesPresent : ∀ i : Fin negatives.length, ∃ j : Fin 37, ∀ w : Fin 14,
+    test (Fin.natAdd 21 j) w = (negatives.get i).testBit w.val := by
+  decide +kernel
+
+private theorem exactFunction (C : Circuit) (L : List Column) (shape : BinaryBack 14 C)
+    (step : ∀ j g a b, C.gates[j]? = some g → g.inputs = [a, b] →
+      columnAt (stock ++ L) (14 + j) =
+        ApplyGate g.op (columnAt (stock ++ L) a) (columnAt (stock ++ L) b))
+    (hv : C.output < 14 + C.gates.length) (out : columnAt (stock ++ L) C.output = target) :
+    ∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = true ↔ PEqualNP.Outside.L_meta_17589_aux.FanoE x := by
+  have ht (j : Fin 58) : C.eval (List.ofFn (test j)) = target (testIndex j) := by
+    change value C (test j) C.output = _
+    rw [matchesTest C L shape step j C.output hv, out]
+  have yes (j : Fin 21) : target (testIndex (Fin.castAdd 37 j)) = true := by
+    simp [target, testIndex, j.isLt]
+  have no (j : Fin 37) : target (testIndex (Fin.natAdd 21 j)) = false := by
+    simp [target, testIndex, Fin.val_natAdd]
+  have pos (p l : Fin 7) (h : related p l) :
+      C.eval (List.ofFn fun i : Fin 14 => decide (i = Fin.castAdd 7 p ∨ i = Fin.natAdd 7 l)) = true := by
+    obtain ⟨j, hj⟩ := positivesPresent p l h
+    simpa only [funext hj, yes] using ht (Fin.castAdd 37 j)
+  have neg (m : ℕ) (hm : m ∈ negatives) :
+      C.eval (List.ofFn fun i : Fin 14 => m.testBit i.val) = false := by
+    obtain ⟨k,hk,hv⟩ := List.mem_iff_getElem.mp hm
+    obtain ⟨j,hj⟩ := negativesPresent ⟨k,hk⟩
+    simpa only [funext hj, List.get_eq_getElem, hv, no] using ht (Fin.natAdd 21 j)
+  apply PEqualNP.Outside.L_meta_18556 (fun x => C.eval (List.ofFn x))
+  · intro x y hxy
+    exact valueMono shape hxy C.output
+  · exact pos
+  · exact neg
+
+/-- The two marked zeros in a trace for L-meta-4650 force three AND gates active on the
+tracked edge in the circuit recovered from the trace. -/
+theorem threeAndsOfTrace (L : List Column) (hsize : L.length ≤ 27) (hT : HasTraceSteps L)
+    (hout : target ∈ L) :
+    ∃ C : Circuit, C.size = 27 ∧ BinaryBack 14 C ∧
+      (∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = true ↔ PEqualNP.Outside.L_meta_17589_aux.FanoE x) ∧
+      ∃ i j k, i ≠ j ∧ i ≠ k ∧ j ≠ k ∧ ActiveAnd C (0 : Fin 14) 7 i ∧
+        ActiveAnd C (0 : Fin 14) 7 j ∧ ActiveAnd C (0 : Fin 14) 7 k := by
+  classical
+  have steps (i : Fin L.length) : ∃ (a b : ℕ) (tag : GateOp),
+      (tag = .and ∨ tag = .or) ∧ a ≠ b ∧ a < 14 + i.val ∧ b < 14 + i.val ∧
+      columnAt L i.val = ApplyGate tag (columnAt (stock ++ L) a) (columnAt (stock ++ L) b) := by
+    obtain ⟨a,b,hn,ha,hb,he | ⟨_,he⟩⟩ := hT i.val i.isLt
+    · exact ⟨a,b,.or,Or.inr rfl,hn,ha,hb,by simpa [ApplyGate] using he⟩
+    · exact ⟨a,b,.and,Or.inl rfl,hn,ha,hb,by simpa [ApplyGate] using he⟩
+  choose a b tag htag hn ha hb hs using steps
+  obtain ⟨o, ho, hoT⟩ := List.mem_iff_getElem.mp hout
+  let C : Circuit := ⟨List.ofFn fun i => ⟨tag i, [a i, b i]⟩, 14 + o⟩
+  have len : C.gates.length = L.length := by simp [C]
+  have getGate (j : ℕ) (g : Gate) (h : C.gates[j]? = some g) : ∃ i : Fin L.length,
+      j = i.val ∧ g = ⟨tag i, [a i, b i]⟩ := by
+    obtain ⟨hj, he⟩ := List.getElem?_eq_some_iff.mp h
+    exact ⟨⟨j,len ▸ hj⟩, rfl, by simpa [C] using he.symm⟩
+  have shape : BinaryBack 14 C := by
+    intro j g hg
+    obtain ⟨i,rfl,rfl⟩ := getGate j g hg
+    exact ⟨htag i,a i,b i,rfl,hn i,ha i,hb i⟩
+  have step (j : ℕ) (g : Gate) (x y : ℕ) (hg : C.gates[j]? = some g) (hxy : g.inputs = [x,y]) :
+      columnAt (stock ++ L) (14+j) =
+        ApplyGate g.op (columnAt (stock ++ L) x) (columnAt (stock ++ L) y) := by
+    obtain ⟨i,rfl,rfl⟩ := getGate j g hg
+    have e : a i = x ∧ b i = y := by simpa using hxy
+    rw [atStage L i.val, hs i, e.1, e.2]
+  have hsize' : C.size ≤ 27 := by simpa only [Circuit.size, len] using hsize
+  have targetC : columnAt (stock ++ L) C.output = target := by
+    change columnAt (stock ++ L) (14+o) = _
+    rw [atStage L o, columnAt, List.getD_eq_getElem _ _ ho, hoT]
+  have fano := exactFunction C L shape step (by change 14+o < _; omega) targetC
+  have weights : ∀ flip : Bool, ∃ d : ℕ → ℕ,
+      ReadCertificate C (if flip then (7 : Fin 14) else 0) (if flip then (0 : Fin 14) else 7) d ∧
+      2 ≤ d C.output := by
+    intro flip
+    refine ⟨_, readCertificate C L step flip, ?_⟩
+    rw [targetC]
+    cases flip <;> decide
+  have low := PEqualNP.Outside.L_meta_17589_aux.fano27 C (monoOfShape shape) fano
+  exact ⟨C,by omega,shape,fano,fano_double_read_active_ands C hsize' shape fano weights⟩
+
+end MarkedColumns
 
 end PEqualNP.Outside.DoubleReadTrace
 
